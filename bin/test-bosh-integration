@@ -6,13 +6,13 @@ if [ ! -d $base/tmp/bosh ]; then
   echo -e "\n Cloning BOSH..."
   rm -rf $base/tmp
   mkdir -p $base/tmp
-  git clone --recursive --depth 1 --branch master https://github.com/cloudfoundry/bosh.git $base/tmp/bosh
+  git clone --recursive --depth 1 --branch bskyb/merge-stable-3104 https://github.com/nimbus-cloud/bosh.git $base/tmp/bosh
 else
   echo -e "\n Updating BOSH to origin/master..."
   (
     cd $base/tmp/bosh
     git clean -dfx
-    git fetch https://github.com/cloudfoundry/bosh.git master
+    git fetch https://github.com/nimbus-cloud/bosh.git bskyb/merge-stable-3104
     git reset --hard FETCH_HEAD
   )
 fi
