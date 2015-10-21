@@ -24,6 +24,17 @@ type V1ApplySpec struct {
 	PersistentDisk int `json:"persistent_disk"`
 
 	RenderedTemplatesArchiveSpec RenderedTemplatesArchiveSpec `json:"rendered_templates_archive"`
+
+	// Nimbus stuff - start
+	Passive              string `json:"passive"`
+	DrbdEnabled          bool   `json:"drbd_enabled"`
+	DrbdForceMaster      bool   `json:"drbd_force_master"`
+	DrbdReplicationNode1 string `json:"drbd_replication_node1"` // ip
+	DrbdReplicationNode2 string `json:"drbd_replication_node2"` // ip
+	DrbdReplicationType  string `json:"drbd_replication_type"`  // (A|B|C)
+	DrbdSecret           string `json:"drbd_secret"`
+	DnsRegisterOnStart   string `json:"dns_register_on_start"`
+	// Nimbus stuff - end
 }
 
 type PropertiesSpec struct {
@@ -94,3 +105,9 @@ func (s *NetworkSpec) UnmarshalJSON(data []byte) error {
 func (s NetworkSpec) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Fields)
 }
+
+// Nimbus stuff - start
+func (s V1ApplySpec) IsPassive() bool {
+	return s.Passive == "enabled"
+}
+// Nimbus stuff - end

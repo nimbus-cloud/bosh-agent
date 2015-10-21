@@ -65,7 +65,17 @@ var _ = Describe("V1ApplySpec", func() {
 				"rendered_templates_archive": {
 					"sha1": "archive sha 1",
 					"blobstore_id": "archive-blob-id-1"
-				}
+				},
+
+				"passive": "enabled",
+				"drbd_enabled": true,
+				"drbd_force_master": false,
+				"drbd_replication_node1": "10.76.245.71",
+				"drbd_replication_node2": "10.92.245.71",
+				"drbd_replication_type": "A",
+				"drbd_secret": "secret_value",
+				"dns_register_on_start": "cf-nats.dev-paas.bskyb.com"
+
 			}`
 
 			spec := V1ApplySpec{}
@@ -122,9 +132,22 @@ var _ = Describe("V1ApplySpec", func() {
 					BlobstoreID: "archive-blob-id-1",
 				},
 				NetworkSpecs: expectedNetworks,
+
+				// Nimbus stuff - start
+				Passive:              "enabled",
+				DrbdEnabled:          true,
+				DrbdForceMaster:      false,
+				DrbdReplicationNode1: "10.76.245.71",
+				DrbdReplicationNode2: "10.92.245.71",
+				DrbdReplicationType:  "A",
+				DrbdSecret:           "secret_value",
+				DnsRegisterOnStart:   "cf-nats.dev-paas.bskyb.com",
+				// Nimbus stuff - end
+
 			}
 
 			Expect(spec).To(Equal(expectedSpec))
+			Expect(spec.IsPassive()).To(Equal(true))
 		})
 	})
 
