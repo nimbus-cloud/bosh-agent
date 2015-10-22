@@ -141,7 +141,7 @@ var _ = Describe("V1ApplySpec", func() {
 				DrbdReplicationNode2: "10.92.245.71",
 				DrbdReplicationType:  "A",
 				DrbdSecret:           "secret_value",
-				DnsRegisterOnStart:   "cf-nats.dev-paas.bskyb.com",
+				DNSRegisterOnStart:   "cf-nats.dev-paas.bskyb.com",
 				// Nimbus stuff - end
 
 			}

@@ -33,7 +33,7 @@ type V1ApplySpec struct {
 	DrbdReplicationNode2 string `json:"drbd_replication_node2"` // ip
 	DrbdReplicationType  string `json:"drbd_replication_type"`  // (A|B|C)
 	DrbdSecret           string `json:"drbd_secret"`
-	DnsRegisterOnStart   string `json:"dns_register_on_start"`
+	DNSRegisterOnStart   string `json:"dns_register_on_start"`
 	// Nimbus stuff - end
 }
 
@@ -106,8 +106,6 @@ func (s NetworkSpec) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Fields)
 }
 
-// Nimbus stuff - start
 func (s V1ApplySpec) IsPassive() bool {
 	return s.Passive == "enabled"
 }
-// Nimbus stuff - end
