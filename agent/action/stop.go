@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	boshjobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor"
+	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
 )
 
@@ -32,6 +33,12 @@ func (a StopAction) Run() (value string, err error) {
 		err = bosherr.WrapError(err, "Stopping Monitored Services")
 		return
 	}
+
+	// TODO: this should be injected
+	dnsRegistrar := nimbus.NewDNSRegistrar()
+	dnsRegistrar.StopDNSUpdates()
+
+	// TODO: if drbd enabled should disks be unmounted ?
 
 	value = "stopped"
 	return

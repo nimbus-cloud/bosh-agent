@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	boshjobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor"
+	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
 )
 
@@ -32,6 +33,11 @@ func (a StartAction) Run() (value string, err error) {
 		err = bosherr.WrapError(err, "Starting Monitored Services")
 		return
 	}
+
+	// TODO: call to start DNS updates for dns_register_on_start property
+	// TODO: this should be injected
+	dnsRegistrar := nimbus.NewDNSRegistrar()
+	dnsRegistrar.StartDNSUpdates()
 
 	value = "started"
 	return
