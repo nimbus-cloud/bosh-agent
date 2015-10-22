@@ -34,6 +34,8 @@ func (a StartAction) Run() (value string, err error) {
 		return
 	}
 
+	// TODO: starting a passive job should return error - director should never call start action on the agent
+
 	// TODO: call to start DNS updates for dns_register_on_start property
 	// TODO: this should be injected
 	dnsRegistrar := nimbus.NewDNSRegistrar()
