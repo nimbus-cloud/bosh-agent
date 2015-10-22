@@ -10,11 +10,11 @@ func NewDNSRegistrar() DNSRegistrar {
 	return DNSRegistrar{}
 }
 
-func (r DNSRegistrar) StartDNSUpdates() {
+func (r DNSRegistrar) StartDNSUpdatesIfRequired() {
 
 }
 
-func (r DNSRegistrar) StopDNSUpdates() {
+func (r DNSRegistrar) StopDNSUpdatesIfRequired() {
 
 }
 

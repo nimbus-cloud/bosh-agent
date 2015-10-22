@@ -37,7 +37,7 @@ func (a StartAction) Run() (value string, err error) {
 	// TODO: call to start DNS updates for dns_register_on_start property
 	// TODO: this should be injected
 	dnsRegistrar := nimbus.NewDNSRegistrar()
-	dnsRegistrar.StartDNSUpdates()
+	dnsRegistrar.StartDNSUpdatesIfRequired()
 
 	value = "started"
 	return

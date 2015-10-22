@@ -123,6 +123,11 @@ func (boot bootstrap) Run() (err error) {
 		return bosherr.WrapError(err, "Starting monit")
 	}
 
+	// TODO: call to start DNS updates for dns_register_on_start property
+	// TODO: this should be injected
+	dnsRegistrar := nimbus.NewDNSRegistrar()
+	dnsRegistrar.StartDNSUpdatesIfRequired()
+
 	return nil
 }
 

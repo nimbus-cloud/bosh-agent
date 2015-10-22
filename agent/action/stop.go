@@ -36,7 +36,7 @@ func (a StopAction) Run() (value string, err error) {
 
 	// TODO: this should be injected
 	dnsRegistrar := nimbus.NewDNSRegistrar()
-	dnsRegistrar.StopDNSUpdates()
+	dnsRegistrar.StopDNSUpdatesIfRequired()
 
 	// TODO: if drbd enabled should disks be unmounted ?
 
