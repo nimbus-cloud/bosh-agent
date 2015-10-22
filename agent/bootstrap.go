@@ -3,7 +3,6 @@ package agent
 import (
 	"errors"
 
-	boshas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec"
 	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	boshplatform "github.com/cloudfoundry/bosh-agent/platform"
 	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
@@ -11,7 +10,6 @@ import (
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
-	"path/filepath"
 )
 
 type Bootstrap interface {
@@ -24,6 +22,7 @@ type bootstrap struct {
 	dirProvider     boshdir.Provider
 	settingsService boshsettings.Service
 	logger          boshlog.Logger
+	drbd            nimbus.Drbd
 }
 
 func NewBootstrap(
@@ -38,6 +37,7 @@ func NewBootstrap(
 		dirProvider:     dirProvider,
 		settingsService: settingsService,
 		logger:          logger,
+		drbd:            nimbus.NewDrbd(platform.GetRunner(), platform.GetFs(), dirProvider, logger),
 	}
 }
 
@@ -104,8 +104,10 @@ func (boot bootstrap) Run() (err error) {
 		return errors.New("Error mounting persistent disk, there is more than one persistent disk")
 	}
 
-	if err = boot.setupDrbd(); err != nil {
-		return bosherr.WrapError(err, "Bootstrap.Run() -> setupDrbd()")
+	// sets up drbd when job has drbd enabled
+	// mount/unmount logic is in linux_platform.go (MountPersistentDisk, UnmountPersistentDisk functions)
+	if err = boot.drbd.StartupIfRequired(); err != nil {
+		return bosherr.WrapError(err, "Bootstrap.Run() -> StartupIfRequired()")
 	}
 
 	for diskID := range settings.Disks.Persistent {
@@ -145,28 +147,6 @@ func (boot bootstrap) setUserPasswords(env boshsettings.Env) error {
 	err = boot.platform.SetUserPassword(boshsettings.VCAPUsername, password)
 	if err != nil {
 		return bosherr.WrapError(err, "Setting vcap password")
-	}
-
-	return nil
-}
-
-// sets drbd up when job has drbd enabled
-// more active/passive logic is done in linux_platform.go (MountPersistentDisk and UnmountPersistentDisk)
-func (boot bootstrap) setupDrbd() error {
-	specFilePath := filepath.Join(boot.dirProvider.BoshDir(), "spec.json")
-	specService := boshas.NewConcreteV1Service(boot.fs, specFilePath)
-
-	spec, err := specService.Get()
-	if err != nil {
-		return bosherr.WrapError(err, "Fetching spec")
-	}
-
-	if spec.DrbdEnabled {
-		drbd := nimbus.NewDrbd(boot.platform.GetRunner(), boot.fs, boot.logger)
-		err = drbd.Startup()
-		if err != nil {
-			return bosherr.WrapError(err, "Bootstrap.setupDrbd() -> error calling drbd.Startup()")
-		}
 	}
 
 	return nil

@@ -2,26 +2,52 @@ package nimbus
 
 import (
 	"fmt"
+	"path/filepath"
 
+	boshas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec"
+	boshdir "github.com/cloudfoundry/bosh-agent/settings/directories"
+	bosherr "github.com/cloudfoundry/bosh-utils/errors"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
 )
 
 type Drbd struct {
-	cmdRunner boshsys.CmdRunner
-	fs        boshsys.FileSystem
-	logger    boshlog.Logger
+	cmdRunner   boshsys.CmdRunner
+	fs          boshsys.FileSystem
+	dirProvider boshdir.Provider
+	logger      boshlog.Logger
 }
 
-func NewDrbd(cmdRunner boshsys.CmdRunner, fs boshsys.FileSystem, logger boshlog.Logger) Drbd {
+func NewDrbd(
+	cmdRunner boshsys.CmdRunner,
+	fs boshsys.FileSystem,
+	dirProvider boshdir.Provider,
+	logger boshlog.Logger,
+) Drbd {
 	return Drbd{
-		cmdRunner: cmdRunner,
-		fs:        fs,
-		logger:    logger,
+		cmdRunner:   cmdRunner,
+		fs:          fs,
+		dirProvider: dirProvider,
+		logger:      logger,
 	}
 }
 
-func (d Drbd) Startup() error {
+func (d Drbd) StartupIfRequired() error {
+
+	specFilePath := filepath.Join(d.dirProvider.BoshDir(), "spec.json")
+	specService := boshas.NewConcreteV1Service(d.fs, specFilePath)
+
+	spec, err := specService.Get()
+	if err != nil {
+		return bosherr.WrapError(err, "Fetching spec")
+	}
+
+	if spec.DrbdEnabled {
+		err = d.startup()
+		if err != nil {
+			return bosherr.WrapError(err, "Drbd.StartupIfRequired() -> error calling d.startup()")
+		}
+	}
 
 	return nil
 }
@@ -33,6 +59,10 @@ func (d Drbd) Mount() error {
 
 func (d Drbd) Umount() error {
 
+	return nil
+}
+
+func (d Drbd) startup() error {
 	return nil
 }
 
