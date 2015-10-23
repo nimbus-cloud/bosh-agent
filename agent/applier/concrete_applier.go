@@ -83,6 +83,7 @@ func (a *concreteApplier) Apply(currentApplySpec, desiredApplySpec as.ApplySpec)
 		return bosherr.WrapError(err, "Keeping only needed packages")
 	}
 
+	// potentially disable passive job here on redeploy
 	for i := 0; i < len(jobs); i++ {
 		job := jobs[len(jobs)-1-i]
 

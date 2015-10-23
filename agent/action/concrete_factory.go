@@ -40,7 +40,13 @@ func NewFactory(
 	vitalsService := platform.GetVitalsService()
 	certManager := platform.GetCertManager()
 	ntpService := boshntp.NewConcreteService(platform.GetFs(), dirProvider)
-	dualDCSupport := nimbus.NewDualDCSupport(platform.GetRunner(), platform.GetFs(), dirProvider, logger)
+	dualDCSupport := nimbus.NewDualDCSupport(
+		platform.GetRunner(),
+		platform.GetFs(),
+		dirProvider,
+		settingsService,
+		logger,
+	)
 
 	factory = concreteFactory{
 		availableActions: map[string]Action{

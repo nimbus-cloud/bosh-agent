@@ -8,24 +8,33 @@ import (
 	fakejobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor/fakes"
 	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	fakeplatform "github.com/cloudfoundry/bosh-agent/platform/fakes"
+	fakesettings "github.com/cloudfoundry/bosh-agent/settings/fakes"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 )
 
 func init() {
 	Describe("Start", func() {
 		var (
-			jobSupervisor *fakejobsuper.FakeJobSupervisor
-			platform      *fakeplatform.FakePlatform
-			logger        boshlog.Logger
-			dualDCSupport nimbus.DualDCSupport
-			action        StartAction
+			jobSupervisor   *fakejobsuper.FakeJobSupervisor
+			platform        *fakeplatform.FakePlatform
+			settingsService *fakesettings.FakeSettingsService
+			logger          boshlog.Logger
+			dualDCSupport   nimbus.DualDCSupport
+			action          StartAction
 		)
 
 		BeforeEach(func() {
 			jobSupervisor = fakejobsuper.NewFakeJobSupervisor()
 			platform = fakeplatform.NewFakePlatform()
 			logger = boshlog.NewLogger(boshlog.LevelNone)
-			dualDCSupport = nimbus.NewDualDCSupport(platform.GetRunner(), platform.GetFs(), platform.GetDirProvider(), logger)
+			settingsService = &fakesettings.FakeSettingsService{}
+			dualDCSupport = nimbus.NewDualDCSupport(
+				platform.GetRunner(),
+				platform.GetFs(),
+				platform.GetDirProvider(),
+				settingsService,
+				logger,
+			)
 			action = NewStart(jobSupervisor, dualDCSupport)
 		})
 

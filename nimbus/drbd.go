@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"errors"
 	boshas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec"
+	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
 	boshdir "github.com/cloudfoundry/bosh-agent/settings/directories"
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
@@ -12,25 +14,28 @@ import (
 )
 
 type DualDCSupport struct {
-	cmdRunner   boshsys.CmdRunner
-	fs          boshsys.FileSystem
-	dirProvider boshdir.Provider
-	specService boshas.V1Service
-	logger      boshlog.Logger
+	cmdRunner       boshsys.CmdRunner
+	fs              boshsys.FileSystem
+	dirProvider     boshdir.Provider
+	specService     boshas.V1Service
+	settingsService boshsettings.Service
+	logger          boshlog.Logger
 }
 
 func NewDualDCSupport(
 	cmdRunner boshsys.CmdRunner,
 	fs boshsys.FileSystem,
 	dirProvider boshdir.Provider,
+	settingsService boshsettings.Service,
 	logger boshlog.Logger,
 ) DualDCSupport {
 	return DualDCSupport{
-		cmdRunner:   cmdRunner,
-		fs:          fs,
-		dirProvider: dirProvider,
-		specService: boshas.NewConcreteV1Service(fs, filepath.Join(dirProvider.BoshDir(), "spec.json")),
-		logger:      logger,
+		cmdRunner:       cmdRunner,
+		fs:              fs,
+		dirProvider:     dirProvider,
+		specService:     boshas.NewConcreteV1Service(fs, filepath.Join(dirProvider.BoshDir(), "spec.json")),
+		settingsService: settingsService,
+		logger:          logger,
 	}
 }
 
@@ -51,24 +56,56 @@ func (d DualDCSupport) SetupDRBDIfRequired() error {
 	return nil
 }
 
-func (d DualDCSupport) Mount() error {
+func (d DualDCSupport) DRBDMount() error {
 
 	return nil
 }
 
-func (d DualDCSupport) Umount() error {
+func (d DualDCSupport) DRBDUmount() error {
 
 	return nil
 }
 
 func (d DualDCSupport) setupDRBD() error {
+	configBody, err := d.drbdConfig()
+	if err != nil {
+		return err
+	}
+	d.fs.WriteFileString("/etc/drbd.d/r0.res", configBody)
+
 	return nil
 }
 
-func drbdConfig(replicationType, secret, thisHostName, thisHostIP, otherHostIP string) string {
-	// this needs to be written to: /etc/drbd.d/r0.res
-	configBody := fmt.Sprintf(drbdConfigTemplate, replicationType, secret, thisHostName, thisHostIP, otherHostIP)
-	return configBody
+func (d DualDCSupport) drbdConfig() (string, error) {
+	spec, err := d.specService.Get()
+	if err != nil {
+		return "", bosherr.WrapError(err, "Fetching spec")
+	}
+
+	ips := d.settingsService.GetSettings().Networks.IPs()
+	if len(ips) == 0 {
+		return "", errors.New("DualDCSupport.drbdConfig() -> settingsService.GetSettings().Networks.IPs(), no ip found")
+	}
+
+	thisHostIP := ips[0]
+	otherHostIP := ""
+
+	if thisHostIP == spec.DrbdReplicationNode1 {
+		otherHostIP = spec.DrbdReplicationNode2
+	} else {
+		otherHostIP = spec.DrbdReplicationNode1
+	}
+
+	configBody := fmt.Sprintf(
+		drbdConfigTemplate,
+		spec.DrbdReplicationType,
+		spec.DrbdSecret,
+		d.settingsService.GetSettings().AgentID,
+		thisHostIP,
+		otherHostIP,
+	)
+
+	return configBody, nil
 }
 
 const drbdConfigTemplate = `

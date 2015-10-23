@@ -53,7 +53,13 @@ var _ = Describe("concreteFactory", func() {
 		specService = fakeas.NewFakeV1Service()
 		jobScriptProvider = &fakescript.FakeJobScriptProvider{}
 		logger = boshlog.NewLogger(boshlog.LevelNone)
-		dualDCSupport = nimbus.NewDualDCSupport(platform.GetRunner(), platform.GetFs(), platform.GetDirProvider(), logger)
+		dualDCSupport = nimbus.NewDualDCSupport(
+			platform.GetRunner(),
+			platform.GetFs(),
+			platform.GetDirProvider(),
+			settingsService,
+			logger,
+		)
 
 		factory = NewFactory(
 			settingsService,
