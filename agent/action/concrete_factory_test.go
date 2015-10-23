@@ -13,6 +13,7 @@ import (
 	fakescript "github.com/cloudfoundry/bosh-agent/agent/script/fakes"
 	faketask "github.com/cloudfoundry/bosh-agent/agent/task/fakes"
 	fakejobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor/fakes"
+	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	fakenotif "github.com/cloudfoundry/bosh-agent/notification/fakes"
 	fakeplatform "github.com/cloudfoundry/bosh-agent/platform/fakes"
 	boshntp "github.com/cloudfoundry/bosh-agent/platform/ntp"
@@ -37,6 +38,7 @@ var _ = Describe("concreteFactory", func() {
 		jobScriptProvider boshscript.JobScriptProvider
 		factory           Factory
 		logger            boshlog.Logger
+		dualDCSupport     nimbus.DualDCSupport
 	)
 
 	BeforeEach(func() {
@@ -51,6 +53,7 @@ var _ = Describe("concreteFactory", func() {
 		specService = fakeas.NewFakeV1Service()
 		jobScriptProvider = &fakescript.FakeJobScriptProvider{}
 		logger = boshlog.NewLogger(boshlog.LevelNone)
+		dualDCSupport = nimbus.NewDualDCSupport(platform.GetRunner(), platform.GetFs(), platform.GetDirProvider(), logger)
 
 		factory = NewFactory(
 			settingsService,
@@ -161,13 +164,13 @@ var _ = Describe("concreteFactory", func() {
 	It("start", func() {
 		action, err := factory.Create("start")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(action).To(Equal(NewStart(jobSupervisor)))
+		Expect(action).To(Equal(NewStart(jobSupervisor, dualDCSupport)))
 	})
 
 	It("stop", func() {
 		action, err := factory.Create("start")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(action).To(Equal(NewStart(jobSupervisor)))
+		Expect(action).To(Equal(NewStart(jobSupervisor, dualDCSupport)))
 	})
 
 	It("unmount_disk", func() {

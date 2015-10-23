@@ -7,6 +7,7 @@ import (
 	boshscript "github.com/cloudfoundry/bosh-agent/agent/script"
 	boshtask "github.com/cloudfoundry/bosh-agent/agent/task"
 	boshjobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor"
+	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	boshnotif "github.com/cloudfoundry/bosh-agent/notification"
 	boshplatform "github.com/cloudfoundry/bosh-agent/platform"
 	boshntp "github.com/cloudfoundry/bosh-agent/platform/ntp"
@@ -39,6 +40,7 @@ func NewFactory(
 	vitalsService := platform.GetVitalsService()
 	certManager := platform.GetCertManager()
 	ntpService := boshntp.NewConcreteService(platform.GetFs(), dirProvider)
+	dualDCSupport := nimbus.NewDualDCSupport(platform.GetRunner(), platform.GetFs(), dirProvider, logger)
 
 	factory = concreteFactory{
 		availableActions: map[string]Action{
@@ -55,8 +57,8 @@ func NewFactory(
 			// Job management
 			"prepare":    NewPrepare(applier),
 			"apply":      NewApply(applier, specService, settingsService),
-			"start":      NewStart(jobSupervisor),
-			"stop":       NewStop(jobSupervisor),
+			"start":      NewStart(jobSupervisor, dualDCSupport),
+			"stop":       NewStop(jobSupervisor, dualDCSupport),
 			"drain":      NewDrain(notifier, specService, jobScriptProvider, jobSupervisor, logger),
 			"get_state":  NewGetState(settingsService, specService, jobSupervisor, vitalsService, ntpService),
 			"run_errand": NewRunErrand(specService, dirProvider.JobsDir(), platform.GetRunner(), logger),

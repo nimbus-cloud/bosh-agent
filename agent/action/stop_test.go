@@ -6,18 +6,27 @@ import (
 
 	. "github.com/cloudfoundry/bosh-agent/agent/action"
 	fakejobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor/fakes"
+	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
+	fakeplatform "github.com/cloudfoundry/bosh-agent/platform/fakes"
+	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 )
 
 func init() {
 	Describe("Stop", func() {
 		var (
 			jobSupervisor *fakejobsuper.FakeJobSupervisor
+			platform      *fakeplatform.FakePlatform
+			logger        boshlog.Logger
+			dualDCSupport nimbus.DualDCSupport
 			action        StopAction
 		)
 
 		BeforeEach(func() {
 			jobSupervisor = fakejobsuper.NewFakeJobSupervisor()
-			action = NewStop(jobSupervisor)
+			platform = fakeplatform.NewFakePlatform()
+			logger = boshlog.NewLogger(boshlog.LevelNone)
+			dualDCSupport = nimbus.NewDualDCSupport(platform.GetRunner(), platform.GetFs(), platform.GetDirProvider(), logger)
+			action = NewStop(jobSupervisor, dualDCSupport)
 		})
 
 		It("is asynchronous", func() {

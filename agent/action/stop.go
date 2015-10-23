@@ -10,11 +10,13 @@ import (
 
 type StopAction struct {
 	jobSupervisor boshjobsuper.JobSupervisor
+	dualDCSupport nimbus.DualDCSupport
 }
 
-func NewStop(jobSupervisor boshjobsuper.JobSupervisor) (stop StopAction) {
+func NewStop(jobSupervisor boshjobsuper.JobSupervisor, dualDCSupport nimbus.DualDCSupport) (stop StopAction) {
 	stop = StopAction{
 		jobSupervisor: jobSupervisor,
+		dualDCSupport: dualDCSupport,
 	}
 	return
 }
@@ -34,10 +36,7 @@ func (a StopAction) Run() (value string, err error) {
 		return
 	}
 
-	// TODO: this should be injected
-	dnsRegistrar := nimbus.NewDNSRegistrar()
-	dnsRegistrar.StopDNSUpdatesIfRequired()
-
+	a.dualDCSupport.StopDNSUpdatesIfRequired()
 	// TODO: if drbd enabled should disks be unmounted ?
 
 	value = "stopped"

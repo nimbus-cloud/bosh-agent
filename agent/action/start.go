@@ -10,11 +10,13 @@ import (
 
 type StartAction struct {
 	jobSupervisor boshjobsuper.JobSupervisor
+	dualDCSupport nimbus.DualDCSupport
 }
 
-func NewStart(jobSupervisor boshjobsuper.JobSupervisor) (start StartAction) {
+func NewStart(jobSupervisor boshjobsuper.JobSupervisor, dualDCSupport nimbus.DualDCSupport) (start StartAction) {
 	start = StartAction{
 		jobSupervisor: jobSupervisor,
+		dualDCSupport: dualDCSupport,
 	}
 	return
 }
@@ -35,11 +37,9 @@ func (a StartAction) Run() (value string, err error) {
 	}
 
 	// TODO: starting a passive job should return error - director should never call start action on the agent
-
-	// TODO: call to start DNS updates for dns_register_on_start property
-	// TODO: this should be injected
-	dnsRegistrar := nimbus.NewDNSRegistrar()
-	dnsRegistrar.StartDNSUpdatesIfRequired()
+	// TODO: if drbd enabled should disks be mounted ?
+	// TODO: should the value be "passive" ???
+	a.dualDCSupport.StartDNSUpdatesIfRequired()
 
 	value = "started"
 	return

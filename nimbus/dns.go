@@ -3,19 +3,14 @@ package nimbus
 // dns_register_on_start support goes in here
 // update DNS every 60s
 
-type DNSRegistrar struct {
+func (r DualDCSupport) StartDNSUpdatesIfRequired() error {
+
+	return nil
 }
 
-func NewDNSRegistrar() DNSRegistrar {
-	return DNSRegistrar{}
-}
+func (r DualDCSupport) StopDNSUpdatesIfRequired() error {
 
-func (r DNSRegistrar) StartDNSUpdatesIfRequired() {
-
-}
-
-func (r DNSRegistrar) StopDNSUpdatesIfRequired() {
-
+	return nil
 }
 
 //func updateDns() {

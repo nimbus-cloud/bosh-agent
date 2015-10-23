@@ -11,39 +11,38 @@ import (
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
 )
 
-type Drbd struct {
+type DualDCSupport struct {
 	cmdRunner   boshsys.CmdRunner
 	fs          boshsys.FileSystem
 	dirProvider boshdir.Provider
+	specService boshas.V1Service
 	logger      boshlog.Logger
 }
 
-func NewDrbd(
+func NewDualDCSupport(
 	cmdRunner boshsys.CmdRunner,
 	fs boshsys.FileSystem,
 	dirProvider boshdir.Provider,
 	logger boshlog.Logger,
-) Drbd {
-	return Drbd{
+) DualDCSupport {
+	return DualDCSupport{
 		cmdRunner:   cmdRunner,
 		fs:          fs,
 		dirProvider: dirProvider,
+		specService: boshas.NewConcreteV1Service(fs, filepath.Join(dirProvider.BoshDir(), "spec.json")),
 		logger:      logger,
 	}
 }
 
-func (d Drbd) StartupIfRequired() error {
+func (d DualDCSupport) SetupDRBDIfRequired() error {
 
-	specFilePath := filepath.Join(d.dirProvider.BoshDir(), "spec.json")
-	specService := boshas.NewConcreteV1Service(d.fs, specFilePath)
-
-	spec, err := specService.Get()
+	spec, err := d.specService.Get()
 	if err != nil {
 		return bosherr.WrapError(err, "Fetching spec")
 	}
 
 	if spec.DrbdEnabled {
-		err = d.startup()
+		err = d.setupDRBD()
 		if err != nil {
 			return bosherr.WrapError(err, "Drbd.StartupIfRequired() -> error calling d.startup()")
 		}
@@ -52,17 +51,17 @@ func (d Drbd) StartupIfRequired() error {
 	return nil
 }
 
-func (d Drbd) Mount() error {
+func (d DualDCSupport) Mount() error {
 
 	return nil
 }
 
-func (d Drbd) Umount() error {
+func (d DualDCSupport) Umount() error {
 
 	return nil
 }
 
-func (d Drbd) startup() error {
+func (d DualDCSupport) setupDRBD() error {
 	return nil
 }
 

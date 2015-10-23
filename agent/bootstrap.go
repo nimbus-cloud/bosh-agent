@@ -22,7 +22,7 @@ type bootstrap struct {
 	dirProvider     boshdir.Provider
 	settingsService boshsettings.Service
 	logger          boshlog.Logger
-	drbd            nimbus.Drbd
+	dualDCSupport   nimbus.DualDCSupport
 }
 
 func NewBootstrap(
@@ -37,7 +37,7 @@ func NewBootstrap(
 		dirProvider:     dirProvider,
 		settingsService: settingsService,
 		logger:          logger,
-		drbd:            nimbus.NewDrbd(platform.GetRunner(), platform.GetFs(), dirProvider, logger),
+		dualDCSupport:   nimbus.NewDualDCSupport(platform.GetRunner(), platform.GetFs(), dirProvider, logger),
 	}
 }
 
@@ -106,8 +106,8 @@ func (boot bootstrap) Run() (err error) {
 
 	// sets up drbd when job has drbd enabled
 	// mount/unmount logic is in linux_platform.go (MountPersistentDisk, UnmountPersistentDisk functions)
-	if err = boot.drbd.StartupIfRequired(); err != nil {
-		return bosherr.WrapError(err, "Bootstrap.Run() -> StartupIfRequired()")
+	if err = boot.dualDCSupport.SetupDRBDIfRequired(); err != nil {
+		return bosherr.WrapError(err, "Bootstrap.Run() -> boot.dualDCSupport.SetupDRBDIfRequired()")
 	}
 
 	for diskID := range settings.Disks.Persistent {
@@ -125,10 +125,9 @@ func (boot bootstrap) Run() (err error) {
 		return bosherr.WrapError(err, "Starting monit")
 	}
 
-	// TODO: call to start DNS updates for dns_register_on_start property
-	// TODO: this should be injected
-	dnsRegistrar := nimbus.NewDNSRegistrar()
-	dnsRegistrar.StartDNSUpdatesIfRequired()
+	if err = boot.dualDCSupport.StartDNSUpdatesIfRequired(); err != nil {
+		return bosherr.WrapError(err, "Bootstrap.Run() -> boot.dualDCSupport.StartDNSUpdatesIfRequired()")
+	}
 
 	return nil
 }
