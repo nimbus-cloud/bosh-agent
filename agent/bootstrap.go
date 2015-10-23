@@ -37,7 +37,13 @@ func NewBootstrap(
 		dirProvider:     dirProvider,
 		settingsService: settingsService,
 		logger:          logger,
-		dualDCSupport:   nimbus.NewDualDCSupport(platform.GetRunner(), platform.GetFs(), dirProvider, logger),
+		dualDCSupport: nimbus.NewDualDCSupport(
+			platform.GetRunner(),
+			platform.GetFs(),
+			dirProvider,
+			settingsService,
+			logger,
+		),
 	}
 }
 
