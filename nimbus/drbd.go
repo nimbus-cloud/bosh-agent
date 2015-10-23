@@ -13,6 +13,8 @@ import (
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
 )
 
+const nimbusLogTag = "Nimbus"
+
 type DualDCSupport struct {
 	cmdRunner       boshsys.CmdRunner
 	fs              boshsys.FileSystem
@@ -73,7 +75,49 @@ func (d DualDCSupport) setupDRBD() error {
 	}
 	d.fs.WriteFileString("/etc/drbd.d/r0.res", configBody)
 
+	d.createLvm()
+	d.drdbRestart()
+	d.drbdCreatePartition()
+
 	return nil
+}
+
+func (d DualDCSupport) createLvm() error {
+
+	return nil
+}
+
+func (d DualDCSupport) drdbRestart() error {
+
+	return nil
+}
+
+func (d DualDCSupport) drbdCreatePartition() error {
+
+	return nil
+}
+
+func (d DualDCSupport) drbdMakePrimary() (err error) {
+	d.logger.Info(nimbusLogTag, "Drbd making primary")
+
+	spec, err := d.specService.Get()
+	if err != nil {
+		return
+	}
+
+	forceFlag := ""
+	if spec.DrbdForceMaster {
+		forceFlag = "--force"
+	}
+	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "primary", forceFlag, "r0")
+	return
+}
+
+func (d DualDCSupport) drbdMakeSecondary() (err error) {
+	d.logger.Info(nimbusLogTag, "Drbd making secondary")
+
+	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "secondary", "r0")
+	return
 }
 
 func (d DualDCSupport) drbdConfig() (string, error) {
