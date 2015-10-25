@@ -110,6 +110,8 @@ func (boot bootstrap) Run() (err error) {
 		return errors.New("Error mounting persistent disk, there is more than one persistent disk")
 	}
 
+	// TODO: see if it is possible to replace MountPersistentDisk/UnmountPersistentDisk functions with something that knows
+	// about drbd and either sets it up when needed or delegates to linux_platform.go
 	// sets up drbd when job has drbd enabled
 	// mount/unmount logic is in linux_platform.go (MountPersistentDisk, UnmountPersistentDisk functions)
 	if err = boot.dualDCSupport.SetupDRBDIfRequired(); err != nil {

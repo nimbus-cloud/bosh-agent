@@ -242,12 +242,10 @@ func (d DualDCSupport) writeDrbdConfig() (err error) {
 		return bosherr.WrapError(err, "Fetching spec")
 	}
 
-	ips := d.settingsService.GetSettings().Networks.IPs()
-	if len(ips) == 0 {
-		return errors.New("DualDCSupport.drbdConfig() -> settingsService.GetSettings().Networks.IPs(), no ip found")
+	thisHostIP, err := d.thisHostIP()
+	if err != nil {
+		return
 	}
-
-	thisHostIP := ips[0]
 	otherHostIP := ""
 
 	if thisHostIP == spec.DrbdReplicationNode1 {
@@ -268,6 +266,17 @@ func (d DualDCSupport) writeDrbdConfig() (err error) {
 	err = d.fs.WriteFileString("/etc/drbd.d/r0.res", configBody)
 
 	return
+}
+
+func (d DualDCSupport) thisHostIP() (ip string, err error) {
+	ips := d.settingsService.GetSettings().Networks.IPs()
+
+	if len(ips) == 0 {
+		return "", errors.New("DualDCSupport.thisHostIP() -> settingsService.GetSettings().Networks.IPs(), no ip found")
+	}
+
+	// TODO: is this correct??? what if multiple networks are configured???
+	return ips[0], nil
 }
 
 const nimbusLogTag = "Nimbus"
