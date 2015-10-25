@@ -3,8 +3,10 @@ package nimbus
 import (
 	"fmt"
 	"path/filepath"
-
+	"regexp"
+	"strings"
 	"errors"
+
 	boshas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec"
 	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
 	boshdir "github.com/cloudfoundry/bosh-agent/settings/directories"
@@ -68,33 +70,90 @@ func (d DualDCSupport) DRBDUmount() error {
 	return nil
 }
 
-func (d DualDCSupport) setupDRBD() error {
-	configBody, err := d.drbdConfig()
-	if err != nil {
-		return err
+func (d DualDCSupport) setupDRBD() (err error) {
+
+	if err = d.writeDrbdConfig(); err != nil {
+		return bosherr.WrapError(err, "Failure: DualDCSupport.writeDrbdConfig()")
 	}
-	d.fs.WriteFileString("/etc/drbd.d/r0.res", configBody)
 
-	d.createLvm()
-	d.drdbRestart()
-	d.drbdCreatePartition()
+	if err = d.createLvm(); err != nil {
+		return bosherr.WrapError(err, "Failure: DualDCSupport.createLvm()")
+	}
 
-	return nil
+	if err = d.drdbRestart(); err != nil {
+		return bosherr.WrapError(err, "Failure: DualDCSupport.drdbRestart()")
+	}
+
+	if err = d.drbdCreatePartition(); err != nil {
+		return bosherr.WrapError(err, "Failure: DualDCSupport.drbdCreatePartition()")
+	}
+
+	return
 }
 
-func (d DualDCSupport) createLvm() error {
+func (d DualDCSupport) createLvm() (err error) {
 
-	return nil
+	settings := d.settingsService.GetSettings()
+
+	disks := settings.Disks.Persistent
+	if len(disks) != 1 {
+		return errors.New("DualDCSupport.createLvm(): expected exactly 1 persistent disk")
+	}
+
+	var diskSettings boshsettings.DiskSettings
+	for diskID := range disks {
+		diskSettings, _ = settings.PersistentDiskSettings(diskID)
+	}
+
+	out, _, _, _ := d.cmdRunner.RunCommand("pvs")
+	if !strings.Contains(out, diskSettings.Path) {
+		d.cmdRunner.RunCommand("pvcreate", diskSettings.Path)
+		d.cmdRunner.RunCommand("vgcreate", "vgStoreData", diskSettings.Path)
+	}
+
+	out, _, _, _ = d.cmdRunner.RunCommand("lvs")
+	matchFound, _ := regexp.MatchString("StoreData\\s+vgStoreData", out)
+	if !matchFound {
+		d.cmdRunner.RunCommand("lvcreate -n StoreData -l 40%FREE vgStoreData")
+	}
+
+	return
 }
 
-func (d DualDCSupport) drdbRestart() error {
-
-	return nil
+func (d DualDCSupport) drdbRestart() (err error) {
+	_, _, _, err = d.cmdRunner.RunCommand("/etc/init.d/drbd", "restart")
+	return
 }
 
-func (d DualDCSupport) drbdCreatePartition() error {
+func (d DualDCSupport) drbdCreatePartition() (err error) {
 
-	return nil
+	out, _, _, err := d.cmdRunner.RunCommand("drbdadm", "dstate", "r0")
+	if err != nil {
+		return
+	}
+	if !strings.HasPrefix(out, "Diskless") {
+		return
+	}
+
+	out, _, _, err = d.cmdRunner.RunCommand("drbdadm", "dump-md", "r0")
+	if err != nil {
+		return bosherr.WrapErrorf(err, "Failure: drbdadm dump-md r0. Output: %s", out)
+	}
+	if strings.Contains(out, "No valid meta data found") {
+		_, _, _, err = d.cmdRunner.RunCommand("echo 'no' | drbdadm create-md r0")
+		if err != nil {
+			return
+		}
+	}
+
+	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "down", "r0")
+	if err != nil {
+		return
+	}
+
+	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "up", "r0")
+
+	return
 }
 
 func (d DualDCSupport) drbdMakePrimary() (err error) {
@@ -120,15 +179,15 @@ func (d DualDCSupport) drbdMakeSecondary() (err error) {
 	return
 }
 
-func (d DualDCSupport) drbdConfig() (string, error) {
+func (d DualDCSupport) writeDrbdConfig() (err error) {
 	spec, err := d.specService.Get()
 	if err != nil {
-		return "", bosherr.WrapError(err, "Fetching spec")
+		return bosherr.WrapError(err, "Fetching spec")
 	}
 
 	ips := d.settingsService.GetSettings().Networks.IPs()
 	if len(ips) == 0 {
-		return "", errors.New("DualDCSupport.drbdConfig() -> settingsService.GetSettings().Networks.IPs(), no ip found")
+		return errors.New("DualDCSupport.drbdConfig() -> settingsService.GetSettings().Networks.IPs(), no ip found")
 	}
 
 	thisHostIP := ips[0]
@@ -149,7 +208,9 @@ func (d DualDCSupport) drbdConfig() (string, error) {
 		otherHostIP,
 	)
 
-	return configBody, nil
+	err = d.fs.WriteFileString("/etc/drbd.d/r0.res", configBody)
+
+	return
 }
 
 const drbdConfigTemplate = `
