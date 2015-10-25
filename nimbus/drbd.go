@@ -1,13 +1,16 @@
 package nimbus
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"errors"
+	"time"
 
 	boshas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec"
+	boshdisk "github.com/cloudfoundry/bosh-agent/platform/disk"
 	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
 	boshdir "github.com/cloudfoundry/bosh-agent/settings/directories"
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
@@ -15,14 +18,14 @@ import (
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
 )
 
-const nimbusLogTag = "Nimbus"
-
 type DualDCSupport struct {
 	cmdRunner       boshsys.CmdRunner
 	fs              boshsys.FileSystem
 	dirProvider     boshdir.Provider
 	specService     boshas.V1Service
 	settingsService boshsettings.Service
+	mounter         boshdisk.Mounter
+	formatter       boshdisk.Formatter
 	logger          boshlog.Logger
 }
 
@@ -33,12 +36,19 @@ func NewDualDCSupport(
 	settingsService boshsettings.Service,
 	logger boshlog.Logger,
 ) DualDCSupport {
+
+	specService := boshas.NewConcreteV1Service(fs, filepath.Join(dirProvider.BoshDir(), "spec.json"))
+	linuxMounter := boshdisk.NewLinuxMounter(cmdRunner, boshdisk.NewCmdMountsSearcher(cmdRunner), 1*time.Second)
+	linuxFormatter := boshdisk.NewLinuxFormatter(cmdRunner, fs)
+
 	return DualDCSupport{
 		cmdRunner:       cmdRunner,
 		fs:              fs,
 		dirProvider:     dirProvider,
-		specService:     boshas.NewConcreteV1Service(fs, filepath.Join(dirProvider.BoshDir(), "spec.json")),
+		specService:     specService,
 		settingsService: settingsService,
+		mounter:         linuxMounter,
+		formatter:       linuxFormatter,
 		logger:          logger,
 	}
 }
@@ -53,39 +63,86 @@ func (d DualDCSupport) SetupDRBDIfRequired() error {
 	if spec.DrbdEnabled {
 		err = d.setupDRBD()
 		if err != nil {
-			return bosherr.WrapError(err, "Drbd.StartupIfRequired() -> error calling d.startup()")
+			return bosherr.WrapError(err, "SetupDRBDIfRequired() -> error calling d.setupDRBD()")
 		}
 	}
 
 	return nil
 }
 
-func (d DualDCSupport) DRBDMount() error {
+func (d DualDCSupport) DRBDMount(mountPoint string) (err error) {
+	d.logger.Info(nimbusLogTag, "Drbd mounting %s", mountPoint)
 
-	return nil
+	isMounted, err := d.mounter.IsMounted(mountPoint)
+	if err != nil {
+		return bosherr.WrapErrorf(err, "DRBDMount() -> error calling mounter.IsMounted(%s)", mountPoint)
+	}
+
+	if isMounted {
+		return
+	}
+
+	err = d.drbdMakePrimary()
+	if err != nil {
+		return bosherr.WrapError(err, "DRBDMount() -> error calling drbdMakePrimary()")
+	}
+
+	err = d.fs.MkdirAll(mountPoint, os.FileMode(0755))
+	if err != nil {
+		return bosherr.WrapError(err, "DRBDMount() -> error calling fs.MkdirAll()")
+	}
+
+	out, _, _, err := d.cmdRunner.RunCommand("file -s /dev/drbd1")
+	if err != nil {
+		return bosherr.WrapError(err, "DRBDMount() -> error checking if filesystem exists")
+	}
+	if strings.HasPrefix(out, "/dev/drbd1: data") {
+		err = d.formatter.Format("/dev/drbd1", boshdisk.FileSystemExt4)
+		if err != nil {
+			return bosherr.WrapError(err, "DRBDMount() -> error calling formatter.Format")
+		}
+	}
+
+	err = d.mounter.Mount("/dev/drbd1", mountPoint)
+	if err != nil {
+		return bosherr.WrapError(err, "DRBDMount() -> error calling mounter.Mount()")
+	}
+
+	return
 }
 
-func (d DualDCSupport) DRBDUmount() error {
+func (d DualDCSupport) DRBDUmount(mountPoint string) (err error) {
+	d.logger.Info(nimbusLogTag, "Drbd unmounting %s", mountPoint)
 
-	return nil
+	_, err = d.mounter.Unmount(mountPoint)
+	if err != nil {
+		return bosherr.WrapErrorf(err, "DRBDUmount() -> error calling mounter.Unmount(%s)", mountPoint)
+	}
+
+	err = d.drbdMakeSecondary()
+	if err != nil {
+		return bosherr.WrapError(err, "DRBDUmount() -> error calling drbdMakeSecondary")
+	}
+
+	return
 }
 
 func (d DualDCSupport) setupDRBD() (err error) {
 
 	if err = d.writeDrbdConfig(); err != nil {
-		return bosherr.WrapError(err, "Failure: DualDCSupport.writeDrbdConfig()")
+		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling writeDrbdConfig()")
 	}
 
 	if err = d.createLvm(); err != nil {
-		return bosherr.WrapError(err, "Failure: DualDCSupport.createLvm()")
+		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling createLvm()")
 	}
 
 	if err = d.drdbRestart(); err != nil {
-		return bosherr.WrapError(err, "Failure: DualDCSupport.drdbRestart()")
+		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling drdbRestart()")
 	}
 
 	if err = d.drbdCreatePartition(); err != nil {
-		return bosherr.WrapError(err, "Failure: DualDCSupport.drbdCreatePartition()")
+		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling drbdCreatePartition()")
 	}
 
 	return
@@ -212,6 +269,8 @@ func (d DualDCSupport) writeDrbdConfig() (err error) {
 
 	return
 }
+
+const nimbusLogTag = "Nimbus"
 
 const drbdConfigTemplate = `
 resource r0 {
