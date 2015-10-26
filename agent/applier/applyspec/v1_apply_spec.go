@@ -39,10 +39,17 @@ type V1ApplySpec struct {
 
 type PropertiesSpec struct {
 	LoggingSpec LoggingSpec `json:"logging"`
+	DNSSpec     DNSSpec     `json:"dns"`
 }
 
 type LoggingSpec struct {
 	MaxLogFileSize string `json:"max_log_file_size"`
+}
+
+type DNSSpec struct {
+	DNSServers []string `json:"dnsservers"`
+	Key        string   `json:"key"`
+	TTL        int      `json:"ttl"`
 }
 
 const (

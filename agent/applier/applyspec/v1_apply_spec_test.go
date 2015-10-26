@@ -17,7 +17,12 @@ var _ = Describe("V1ApplySpec", func() {
 				"id": "node-id",
 				"index": 4,
 				"properties": {
-					"logging": {"max_log_file_size": "10M"}
+					"logging": {"max_log_file_size": "10M"},
+					"dns": {
+						"dnsservers": ["10.76.54.8", "10.92.54.8"],
+						"key": "dns_key",
+						"ttl": 30
+					}
 				},
 				"job": {
 					"name": "router",
@@ -111,6 +116,11 @@ var _ = Describe("V1ApplySpec", func() {
 				NodeID: "node-id",
 				PropertiesSpec: PropertiesSpec{
 					LoggingSpec: LoggingSpec{MaxLogFileSize: "10M"},
+					DNSSpec: DNSSpec{
+						DNSServers: []string{"10.76.54.8", "10.92.54.8"},
+						Key:        "dns_key",
+						TTL:        30,
+					},
 				},
 				JobSpec: JobSpec{
 					Name:        &jobName,
