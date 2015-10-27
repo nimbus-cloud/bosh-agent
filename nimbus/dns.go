@@ -12,7 +12,7 @@ import (
 
 const dnsUpdateInterval = 60 * time.Second
 
-func (r DualDCSupport) StartDNSUpdatesIfRequired() (err error) {
+func (r *DualDCSupport) StartDNSUpdatesIfRequired() (err error) {
 	var enabled bool
 	if enabled, err = r.dnsUpdatesEnabled(); err != nil {
 		return
@@ -30,7 +30,7 @@ func (r DualDCSupport) StartDNSUpdatesIfRequired() (err error) {
 	return
 }
 
-func (r DualDCSupport) StopDNSUpdatesIfRequired() (err error) {
+func (r *DualDCSupport) StopDNSUpdatesIfRequired() (err error) {
 	var enabled bool
 	if enabled, err = r.dnsUpdatesEnabled(); err != nil {
 		return
