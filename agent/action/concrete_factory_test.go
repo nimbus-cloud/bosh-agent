@@ -72,6 +72,7 @@ var _ = Describe("concreteFactory", func() {
 			jobSupervisor,
 			specService,
 			jobScriptProvider,
+			dualDCSupport,
 			logger,
 		)
 	})

@@ -29,6 +29,7 @@ func NewBootstrap(
 	platform boshplatform.Platform,
 	dirProvider boshdir.Provider,
 	settingsService boshsettings.Service,
+	dualDCSupport nimbus.DualDCSupport,
 	logger boshlog.Logger,
 ) Bootstrap {
 	return bootstrap{
@@ -37,13 +38,7 @@ func NewBootstrap(
 		dirProvider:     dirProvider,
 		settingsService: settingsService,
 		logger:          logger,
-		dualDCSupport: nimbus.NewDualDCSupport(
-			platform.GetRunner(),
-			platform.GetFs(),
-			dirProvider,
-			settingsService,
-			logger,
-		),
+		dualDCSupport:   dualDCSupport,
 	}
 }
 

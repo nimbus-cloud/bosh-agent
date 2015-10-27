@@ -23,6 +23,7 @@ import (
 	boshjobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor"
 	boshmonit "github.com/cloudfoundry/bosh-agent/jobsupervisor/monit"
 	boshmbus "github.com/cloudfoundry/bosh-agent/mbus"
+	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	boshnotif "github.com/cloudfoundry/bosh-agent/notification"
 	boshplatform "github.com/cloudfoundry/bosh-agent/platform"
 	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
@@ -97,10 +98,20 @@ func (app *app) Setup(args []string) error {
 		app.platform,
 		app.logger,
 	)
+
+	dualDCSupport := nimbus.NewDualDCSupport(
+		app.platform.GetRunner(),
+		app.platform.GetFs(),
+		app.dirProvider,
+		settingsService,
+		app.logger,
+	)
+
 	boot := boshagent.NewBootstrap(
 		app.platform,
 		app.dirProvider,
 		settingsService,
+		dualDCSupport,
 		app.logger,
 	)
 
@@ -184,6 +195,7 @@ func (app *app) Setup(args []string) error {
 		jobSupervisor,
 		specService,
 		jobScriptProvider,
+		dualDCSupport,
 		app.logger,
 	)
 

@@ -12,8 +12,6 @@ import (
 
 const dnsUpdateInterval = 60 * time.Second
 
-// TODO: only one instance of DualDCSupport
-
 func (r DualDCSupport) StartDNSUpdatesIfRequired() (err error) {
 	var enabled bool
 	if enabled, err = r.dnsUpdatesEnabled(); err != nil {

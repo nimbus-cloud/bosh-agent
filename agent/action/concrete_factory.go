@@ -32,6 +32,7 @@ func NewFactory(
 	jobSupervisor boshjobsuper.JobSupervisor,
 	specService boshas.V1Service,
 	jobScriptProvider boshscript.JobScriptProvider,
+	dualDCSupport nimbus.DualDCSupport,
 	logger boshlog.Logger,
 ) (factory Factory) {
 	compressor := platform.GetCompressor()
@@ -40,13 +41,6 @@ func NewFactory(
 	vitalsService := platform.GetVitalsService()
 	certManager := platform.GetCertManager()
 	ntpService := boshntp.NewConcreteService(platform.GetFs(), dirProvider)
-	dualDCSupport := nimbus.NewDualDCSupport(
-		platform.GetRunner(),
-		platform.GetFs(),
-		dirProvider,
-		settingsService,
-		logger,
-	)
 
 	factory = concreteFactory{
 		availableActions: map[string]Action{
