@@ -3,7 +3,6 @@ package agent
 import (
 	"errors"
 
-	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	boshplatform "github.com/cloudfoundry/bosh-agent/platform"
 	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
 	boshdir "github.com/cloudfoundry/bosh-agent/settings/directories"
@@ -22,14 +21,12 @@ type bootstrap struct {
 	dirProvider     boshdir.Provider
 	settingsService boshsettings.Service
 	logger          boshlog.Logger
-	dualDCSupport   nimbus.DualDCSupport
 }
 
 func NewBootstrap(
 	platform boshplatform.Platform,
 	dirProvider boshdir.Provider,
 	settingsService boshsettings.Service,
-	dualDCSupport nimbus.DualDCSupport,
 	logger boshlog.Logger,
 ) Bootstrap {
 	return bootstrap{
@@ -38,7 +35,6 @@ func NewBootstrap(
 		dirProvider:     dirProvider,
 		settingsService: settingsService,
 		logger:          logger,
-		dualDCSupport:   dualDCSupport,
 	}
 }
 
@@ -105,14 +101,6 @@ func (boot bootstrap) Run() (err error) {
 		return errors.New("Error mounting persistent disk, there is more than one persistent disk")
 	}
 
-	// TODO: see if it is possible to replace MountPersistentDisk/UnmountPersistentDisk functions with something that knows
-	// about drbd and either sets it up when needed or delegates to linux_platform.go
-	// sets up drbd when job has drbd enabled
-	// mount/unmount logic is in linux_platform.go (MountPersistentDisk, UnmountPersistentDisk functions)
-	if err = boot.dualDCSupport.SetupDRBDIfRequired(); err != nil {
-		return bosherr.WrapError(err, "Bootstrap.Run() -> boot.dualDCSupport.SetupDRBDIfRequired()")
-	}
-
 	for diskID := range settings.Disks.Persistent {
 		diskSettings, _ := settings.PersistentDiskSettings(diskID)
 		if err = boot.platform.MountPersistentDisk(diskSettings, boot.dirProvider.StoreDir()); err != nil {
@@ -126,10 +114,6 @@ func (boot bootstrap) Run() (err error) {
 
 	if err = boot.platform.StartMonit(); err != nil {
 		return bosherr.WrapError(err, "Starting monit")
-	}
-
-	if err = boot.dualDCSupport.StartDNSUpdatesIfRequired(); err != nil {
-		return bosherr.WrapError(err, "Bootstrap.Run() -> boot.dualDCSupport.StartDNSUpdatesIfRequired()")
 	}
 
 	return nil

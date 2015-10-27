@@ -45,12 +45,13 @@ type App interface {
 }
 
 type app struct {
-	logger      boshlog.Logger
-	agent       boshagent.Agent
-	platform    boshplatform.Platform
-	fs          boshsys.FileSystem
-	logTag      string
-	dirProvider boshdirs.Provider
+	logger        boshlog.Logger
+	agent         boshagent.Agent
+	platform      boshplatform.Platform
+	fs            boshsys.FileSystem
+	logTag        string
+	dirProvider   boshdirs.Provider
+	dualDCSupport nimbus.DualDCSupport
 }
 
 func New(logger boshlog.Logger, fs boshsys.FileSystem) App {
@@ -99,7 +100,7 @@ func (app *app) Setup(args []string) error {
 		app.logger,
 	)
 
-	dualDCSupport := nimbus.NewDualDCSupport(
+	app.dualDCSupport = nimbus.NewDualDCSupport(
 		app.platform.GetRunner(),
 		app.platform.GetFs(),
 		app.dirProvider,
@@ -107,11 +108,14 @@ func (app *app) Setup(args []string) error {
 		app.logger,
 	)
 
+	// wrap platform with nimbus specific features - Mount/Unmount persistentdisk
+	platformWrapper := nimbus.NewPlatformWrapper(app.platform, app.dualDCSupport)
+	app.platform = platformWrapper
+
 	boot := boshagent.NewBootstrap(
 		app.platform,
 		app.dirProvider,
 		settingsService,
-		dualDCSupport,
 		app.logger,
 	)
 
@@ -195,7 +199,7 @@ func (app *app) Setup(args []string) error {
 		jobSupervisor,
 		specService,
 		jobScriptProvider,
-		dualDCSupport,
+		app.dualDCSupport,
 		app.logger,
 	)
 
@@ -229,7 +233,13 @@ func (app *app) Setup(args []string) error {
 }
 
 func (app *app) Run() error {
-	err := app.agent.Run()
+
+	err := app.dualDCSupport.StartDNSUpdatesIfRequired()
+	if err != nil {
+		return bosherr.WrapError(err, "Starting DNS updates when required")
+	}
+
+	err = app.agent.Run()
 	if err != nil {
 		return bosherr.WrapError(err, "Running agent")
 	}

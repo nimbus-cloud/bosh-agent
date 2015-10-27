@@ -26,7 +26,7 @@ type V1ApplySpec struct {
 	RenderedTemplatesArchiveSpec RenderedTemplatesArchiveSpec `json:"rendered_templates_archive"`
 
 	// Nimbus stuff - start
-	Passive              string `json:"passive"`
+	Passive              string `json:"passive"` // enabled|disabled|undefined
 	DrbdEnabled          bool   `json:"drbd_enabled"`
 	DrbdForceMaster      bool   `json:"drbd_force_master"`
 	DrbdReplicationNode1 string `json:"drbd_replication_node1"` // ip

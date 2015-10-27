@@ -24,7 +24,6 @@ import (
 
 	devicepathresolver "github.com/cloudfoundry/bosh-agent/infrastructure/devicepathresolver"
 
-	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	boshplatform "github.com/cloudfoundry/bosh-agent/platform"
 	boshcdrom "github.com/cloudfoundry/bosh-agent/platform/cdrom"
 	boshcert "github.com/cloudfoundry/bosh-agent/platform/cert"
@@ -49,7 +48,6 @@ func init() {
 
 				settingsSource  *fakeinf.FakeSettingsSource
 				settingsService *fakesettings.FakeSettingsService
-				dualDCSupport   nimbus.DualDCSupport
 			)
 
 			BeforeEach(func() {
@@ -62,14 +60,7 @@ func init() {
 
 			bootstrap := func() error {
 				logger := boshlog.NewLogger(boshlog.LevelNone)
-				dualDCSupport = nimbus.NewDualDCSupport(
-					platform.GetRunner(),
-					platform.GetFs(),
-					platform.GetDirProvider(),
-					settingsService,
-					logger,
-				)
-				return NewBootstrap(platform, dirProvider, settingsService, dualDCSupport, logger).Run()
+				return NewBootstrap(platform, dirProvider, settingsService, logger).Run()
 			}
 
 			It("sets up runtime configuration", func() {
@@ -464,19 +455,10 @@ func init() {
 					logger,
 				)
 
-				dualDCSupport := nimbus.NewDualDCSupport(
-					platform.GetRunner(),
-					platform.GetFs(),
-					platform.GetDirProvider(),
-					settingsService,
-					logger,
-				)
-
 				boot = NewBootstrap(
 					platform,
 					dirProvider,
 					settingsService,
-					dualDCSupport,
 					logger,
 				)
 			})

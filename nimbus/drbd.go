@@ -18,6 +18,9 @@ import (
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
 )
 
+// TODO: test DNS - local DNS server??? fake?
+// TODO: pointer receiver for methods? Pass DualDCSupport instance as pointer???
+
 type DualDCSupport struct {
 	cmdRunner       boshsys.CmdRunner
 	fs              boshsys.FileSystem
@@ -54,21 +57,34 @@ func NewDualDCSupport(
 	}
 }
 
-func (d DualDCSupport) SetupDRBDIfRequired() error {
-
+func (d DualDCSupport) DRBDEnabled() (bool, error) {
 	spec, err := d.specService.Get()
 	if err != nil {
-		return bosherr.WrapError(err, "Fetching spec")
+		return false, bosherr.WrapError(err, "Fetching spec")
 	}
 
-	if spec.DrbdEnabled {
-		err = d.setupDRBD()
-		if err != nil {
-			return bosherr.WrapError(err, "SetupDRBDIfRequired() -> error calling d.setupDRBD()")
-		}
+	return spec.DrbdEnabled, nil
+}
+
+func (d DualDCSupport) SetupDRBD() (err error) {
+
+	if err = d.writeDrbdConfig(); err != nil {
+		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling writeDrbdConfig()")
 	}
 
-	return nil
+	if err = d.createLvm(); err != nil {
+		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling createLvm()")
+	}
+
+	if err = d.drdbRestart(); err != nil {
+		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling drdbRestart()")
+	}
+
+	if err = d.drbdCreatePartition(); err != nil {
+		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling drbdCreatePartition()")
+	}
+
+	return
 }
 
 func (d DualDCSupport) DRBDMount(mountPoint string) (err error) {
@@ -123,27 +139,6 @@ func (d DualDCSupport) DRBDUmount(mountPoint string) (err error) {
 	err = d.drbdMakeSecondary()
 	if err != nil {
 		return bosherr.WrapError(err, "DRBDUmount() -> error calling drbdMakeSecondary")
-	}
-
-	return
-}
-
-func (d DualDCSupport) setupDRBD() (err error) {
-
-	if err = d.writeDrbdConfig(); err != nil {
-		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling writeDrbdConfig()")
-	}
-
-	if err = d.createLvm(); err != nil {
-		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling createLvm()")
-	}
-
-	if err = d.drdbRestart(); err != nil {
-		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling drdbRestart()")
-	}
-
-	if err = d.drbdCreatePartition(); err != nil {
-		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling drbdCreatePartition()")
 	}
 
 	return
