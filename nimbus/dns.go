@@ -1,67 +1,139 @@
 package nimbus
 
 import (
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
+	"github.com/cloudfoundry/bosh-utils/system"
 )
 
-// dns_register_on_start support goes in here
-// update DNS every 60s
+const dnsUpdateInterval = 60 * time.Second
+
+// TODO: only one instance of DualDCSupport
 
 func (r DualDCSupport) StartDNSUpdatesIfRequired() (err error) {
-
-	spec, err := r.specService.Get()
-	if err != nil {
-		return bosherr.WrapError(err, "Fetching spec")
+	var enabled bool
+	if enabled, err = r.dnsUpdatesEnabled(); err != nil {
+		return
 	}
 
-	if spec.DNSRegisterOnStart != "" {
-		r.runPeriodicUpdates(spec.DNSRegisterOnStart)
+	if enabled {
+		if r.cancelChan != nil {
+			close(r.cancelChan)
+			r.cancelChan = nil
+		}
+		r.cancelChan = make(chan struct{})
+		go r.runPeriodicUpdates(r.cancelChan)
 	}
 
 	return
 }
 
 func (r DualDCSupport) StopDNSUpdatesIfRequired() (err error) {
-
-	return nil
-}
-
-func (r DualDCSupport) runPeriodicUpdates(nameToRegister string) {
-	// this method starts something on a new goroutine
-}
-
-func (r DualDCSupport) updateAllDNSServers(nameToRegister string) (err error) {
-	thisHostIP, err := r.thisHostIP()
-	if err != nil {
-		r.logger.Error(nimbusLogTag, "error reading this host IP: %s", err)
+	var enabled bool
+	if enabled, err = r.dnsUpdatesEnabled(); err != nil {
 		return
 	}
 
-	// TODO: this is wrong - need to take dnsservers from properties
-	for _, network := range r.settingsService.GetSettings().Networks {
-		for _, dnsServer := range network.DNS {
-			r.updateDNSServer(dnsServer, nameToRegister, thisHostIP)
+	if enabled && r.cancelChan != nil {
+		close(r.cancelChan)
+		r.cancelChan = nil
+	}
+
+	return
+}
+
+func (r DualDCSupport) dnsUpdatesEnabled() (enabled bool, err error) {
+	spec, err := r.specService.Get()
+	if err != nil {
+		return false, bosherr.WrapError(err, "Fetching spec")
+	}
+
+	return spec.DNSRegisterOnStart != "", nil
+}
+
+func (r DualDCSupport) runPeriodicUpdates(cancelChan chan struct{}) {
+	tickChan := time.Tick(dnsUpdateInterval)
+
+	for {
+		select {
+		case <-tickChan:
+			err := r.updateAllDNSServers()
+			if err != nil {
+				r.logger.Error(nimbusLogTag, "Error updating DNS: %s, will try again in: %d s", err, dnsUpdateInterval)
+			}
+		case <-cancelChan:
+			return
+		}
+	}
+}
+
+func (r DualDCSupport) updateAllDNSServers() (err error) {
+
+	spec, err := r.specService.Get()
+	if err != nil {
+		return bosherr.WrapError(err, "Fetching spec")
+	}
+
+	dnsSpec := spec.PropertiesSpec.DNSSpec
+	if len(dnsSpec.DNSServers) == 0 || dnsSpec.Key == "" || dnsSpec.TTL == 0 {
+		return errors.New("dnsSpec.DNSServers or dnsSpec.Key or dnsSpec.TTL empty")
+	}
+
+	thisHostIP, err := r.thisHostIP()
+	if err != nil {
+		return
+	}
+
+	for _, dnsServer := range dnsSpec.DNSServers {
+		err = r.updateDNSServer(spec.DNSRegisterOnStart, thisHostIP, dnsServer, dnsSpec.Key, dnsSpec.TTL)
+		if err != nil {
+			r.logger.Error(nimbusLogTag, "error updating dns server: %s, name: %s, error: %s", dnsServer, spec.DNSRegisterOnStart, err)
+			return
 		}
 	}
 
 	return
 }
 
-func (r DualDCSupport) updateDNSServer(dnsServer, nameToRegister, ip string) {
+func (r DualDCSupport) updateDNSServer(nameToRegister, ip, dnsServer, dnsKey string, ttl int) (err error) {
 
-	// zone - derived from nameToRegister
+	var tmpFile system.File
+	if tmpFile, err = r.fs.TempFile("dnsRegisterOnStart-"); err != nil {
+		return
+	}
+	defer r.fs.RemoveAll(tmpFile.Name())
 
-	// TODO: need to get hold of properties from apply spec - possibly extend v1_apply_spec with these props
-	//	return unless properties["dns"]
-	//	return unless properties["dns"]["ttl"]
-	//	return unless properties["dns"]["key"]
-	//	return unless properties["dns"]["dnsservers"]
+	idx := strings.Index(nameToRegister, ".")
+	zone := nameToRegister[idx+1:]
 
-	//	r.fs.TempFile()
+	configBody := fmt.Sprintf(
+		dnsConfigTemplate,
+		dnsServer,
+		zone,
+		nameToRegister,
+		nameToRegister,
+		ttl,
+		ip,
+	)
 
+	if err = r.fs.WriteFileString(tmpFile.Name(), configBody); err != nil {
+		return
+	}
+
+	_, _, _, err = r.cmdRunner.RunCommand("nsupdate", "-t", "4", "-y", dnsKey, "-v", tmpFile.Name())
+
+	return
 }
 
-//func updateDns() {
-//	// iterate over all dns servers and
-//	// nsupdate -t 4 -y #{properties["dns"]["key"]} -v #{tmpdir}/update-#{dns_server}.ns
-//}
+const dnsConfigTemplate = `
+server %s
+zone %s
+update delete %s A
+update add %s %d A %s
+send
+
+`

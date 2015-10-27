@@ -26,6 +26,7 @@ type DualDCSupport struct {
 	settingsService boshsettings.Service
 	mounter         boshdisk.Mounter
 	formatter       boshdisk.Formatter
+	cancelChan      chan struct{}
 	logger          boshlog.Logger
 }
 
