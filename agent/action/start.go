@@ -11,15 +11,13 @@ import (
 
 type StartAction struct {
 	jobSupervisor boshjobsuper.JobSupervisor
-	dualDCSupport nimbus.DualDCSupport
-	platform      boshplatform.Platform
+	actionHook    nimbus.ActionHook
 }
 
 func NewStart(jobSupervisor boshjobsuper.JobSupervisor, dualDCSupport nimbus.DualDCSupport, platform boshplatform.Platform) (start StartAction) {
 	start = StartAction{
 		jobSupervisor: jobSupervisor,
-		dualDCSupport: dualDCSupport,
-		platform:      platform,
+		actionHook:    nimbus.NewActionHook(platform, dualDCSupport),
 	}
 	return
 }
@@ -34,20 +32,10 @@ func (a StartAction) IsPersistent() bool {
 
 func (a StartAction) Run() (value string, err error) {
 
-	// nimbus start - TODO: extract as a separate method
-	// TODO: starting a passive job should return error - director should never call start action on the agent
-	disk, found := a.dualDCSupport.PersistentDiskSettings()
-	if found {
-		if err = a.platform.MountPersistentDisk(disk, a.platform.GetDirProvider().StoreDir()); err != nil {
-			err = bosherr.WrapErrorf(err, "Mounting persistent disk %s", disk)
-			return
-		}
-	}
-	if err = a.dualDCSupport.StartDNSUpdatesIfRequired(); err != nil {
-		err = bosherr.WrapErrorf(err, "Startign DNS updates if required")
+	if err = a.actionHook.OnStartAction(); err != nil {
+		err = bosherr.WrapError(err, "calling nimbus on start hook")
 		return
 	}
-	// nimbus start
 
 	err = a.jobSupervisor.Start()
 	if err != nil {

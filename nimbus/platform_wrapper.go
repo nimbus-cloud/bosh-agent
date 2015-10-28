@@ -135,13 +135,13 @@ func (w PlatformWrapper) MountPersistentDisk(diskSettings boshsettings.DiskSetti
 	// DRBD logic
 	if spec.DrbdEnabled {
 
-		if err = w.dualDCSupport.SetupDRBD(); err != nil {
+		if err = w.dualDCSupport.setupDRBD(); err != nil {
 			return bosherr.WrapError(err, "setting up DRBD")
 		}
 
 		// mount only active side
 		if spec.IsActiveSide() {
-			if err = w.dualDCSupport.DRBDMount(w.GetDirProvider().StoreDir()); err != nil {
+			if err = w.dualDCSupport.mountDRBD(w.GetDirProvider().StoreDir()); err != nil {
 				return bosherr.WrapError(err, "DRBD mounting persistent share")
 			}
 		}
@@ -164,7 +164,7 @@ func (w PlatformWrapper) UnmountPersistentDisk(diskSettings boshsettings.DiskSet
 
 		// unmount only active side
 		if spec.IsActiveSide() {
-			didUnmount, err = w.dualDCSupport.DRBDUmount(w.GetDirProvider().StoreDir())
+			didUnmount, err = w.dualDCSupport.unmountDRBD(w.GetDirProvider().StoreDir())
 			if err != nil {
 				return false, bosherr.WrapError(err, "DRBD unmounting persistent share")
 			}

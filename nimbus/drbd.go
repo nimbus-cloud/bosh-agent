@@ -57,16 +57,7 @@ func NewDualDCSupport(
 	}
 }
 
-func (d DualDCSupport) DRBDEnabled() (bool, error) {
-	spec, err := d.specService.Get()
-	if err != nil {
-		return false, bosherr.WrapError(err, "Fetching spec")
-	}
-
-	return spec.DrbdEnabled, nil
-}
-
-func (d DualDCSupport) SetupDRBD() (err error) {
+func (d DualDCSupport) setupDRBD() (err error) {
 
 	if err = d.writeDrbdConfig(); err != nil {
 		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling writeDrbdConfig()")
@@ -87,12 +78,12 @@ func (d DualDCSupport) SetupDRBD() (err error) {
 	return
 }
 
-func (d DualDCSupport) DRBDMount(mountPoint string) (err error) {
+func (d DualDCSupport) mountDRBD(mountPoint string) (err error) {
 	d.logger.Info(nimbusLogTag, "Drbd mounting %s", mountPoint)
 
 	isMounted, err := d.mounter.IsMounted(mountPoint)
 	if err != nil {
-		return bosherr.WrapErrorf(err, "DRBDMount() -> error calling mounter.IsMounted(%s)", mountPoint)
+		return bosherr.WrapErrorf(err, "mountDRBD() -> error calling mounter.IsMounted(%s)", mountPoint)
 	}
 
 	if isMounted {
@@ -101,50 +92,50 @@ func (d DualDCSupport) DRBDMount(mountPoint string) (err error) {
 
 	err = d.drbdMakePrimary()
 	if err != nil {
-		return bosherr.WrapError(err, "DRBDMount() -> error calling drbdMakePrimary()")
+		return bosherr.WrapError(err, "mountDRBD() -> error calling drbdMakePrimary()")
 	}
 
 	err = d.fs.MkdirAll(mountPoint, os.FileMode(0755))
 	if err != nil {
-		return bosherr.WrapError(err, "DRBDMount() -> error calling fs.MkdirAll()")
+		return bosherr.WrapError(err, "mountDRBD() -> error calling fs.MkdirAll()")
 	}
 
 	out, _, _, err := d.cmdRunner.RunCommand("file -s /dev/drbd1")
 	if err != nil {
-		return bosherr.WrapError(err, "DRBDMount() -> error checking if filesystem exists")
+		return bosherr.WrapError(err, "mountDRBD() -> error checking if filesystem exists")
 	}
 	if strings.HasPrefix(out, "/dev/drbd1: data") {
 		err = d.formatter.Format("/dev/drbd1", boshdisk.FileSystemExt4)
 		if err != nil {
-			return bosherr.WrapError(err, "DRBDMount() -> error calling formatter.Format")
+			return bosherr.WrapError(err, "mountDRBD() -> error calling formatter.Format")
 		}
 	}
 
 	err = d.mounter.Mount("/dev/drbd1", mountPoint)
 	if err != nil {
-		return bosherr.WrapError(err, "DRBDMount() -> error calling mounter.Mount()")
+		return bosherr.WrapError(err, "mountDRBD() -> error calling mounter.Mount()")
 	}
 
 	return
 }
 
-func (d DualDCSupport) DRBDUmount(mountPoint string) (didUnmount bool, err error) {
+func (d DualDCSupport) unmountDRBD(mountPoint string) (didUnmount bool, err error) {
 	d.logger.Info(nimbusLogTag, "Drbd unmounting %s", mountPoint)
 
 	didUnmount, err = d.mounter.Unmount(mountPoint)
 	if err != nil {
-		return false, bosherr.WrapErrorf(err, "DRBDUmount() -> error calling mounter.Unmount(%s)", mountPoint)
+		return false, bosherr.WrapErrorf(err, "unmountDRBD() -> error calling mounter.Unmount(%s)", mountPoint)
 	}
 
 	err = d.drbdMakeSecondary()
 	if err != nil {
-		return false, bosherr.WrapError(err, "DRBDUmount() -> error calling drbdMakeSecondary")
+		return false, bosherr.WrapError(err, "unmountDRBD() -> error calling drbdMakeSecondary")
 	}
 
 	return
 }
 
-func (d DualDCSupport) PersistentDiskSettings() (persistentDisk boshsettings.DiskSettings, found bool) {
+func (d DualDCSupport) persistentDiskSettings() (persistentDisk boshsettings.DiskSettings, found bool) {
 	settings := d.settingsService.GetSettings()
 
 	persistentDisks := settings.Disks.Persistent
@@ -159,7 +150,7 @@ func (d DualDCSupport) PersistentDiskSettings() (persistentDisk boshsettings.Dis
 
 func (d DualDCSupport) createLvm() (err error) {
 
-	diskSettings, found := d.PersistentDiskSettings()
+	diskSettings, found := d.persistentDiskSettings()
 	if !found {
 		return errors.New("DualDCSupport.createLvm(): persistent disk not found")
 	}

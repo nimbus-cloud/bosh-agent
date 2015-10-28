@@ -11,15 +11,13 @@ import (
 
 type StopAction struct {
 	jobSupervisor boshjobsuper.JobSupervisor
-	dualDCSupport nimbus.DualDCSupport
-	platform      boshplatform.Platform
+	actionHook    nimbus.ActionHook
 }
 
 func NewStop(jobSupervisor boshjobsuper.JobSupervisor, dualDCSupport nimbus.DualDCSupport, platform boshplatform.Platform) (stop StopAction) {
 	stop = StopAction{
 		jobSupervisor: jobSupervisor,
-		dualDCSupport: dualDCSupport,
-		platform:      platform,
+		actionHook:    nimbus.NewActionHook(platform, dualDCSupport),
 	}
 	return
 }
@@ -39,19 +37,10 @@ func (a StopAction) Run() (value string, err error) {
 		return
 	}
 
-	// nimbus - start TODO: consider extracting as a method
-	disk, found := a.dualDCSupport.PersistentDiskSettings()
-	if found {
-		if _, err = a.platform.UnmountPersistentDisk(disk); err != nil {
-			err = bosherr.WrapErrorf(err, "Unmounting persistent disk %s", disk)
-			return
-		}
-	}
-	if err = a.dualDCSupport.StopDNSUpdatesIfRequired(); err != nil {
-		err = bosherr.WrapError(err, "Stopping DNS updates if required")
+	if err = a.actionHook.OnStopAction(); err != nil {
+		err = bosherr.WrapError(err, "calling nimbus on stop hook")
 		return
 	}
-	// nimbus - end
 
 	value = "stopped"
 	return
