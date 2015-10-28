@@ -57,8 +57,8 @@ func NewFactory(
 			// Job management
 			"prepare":    NewPrepare(applier),
 			"apply":      NewApply(applier, specService, settingsService),
-			"start":      NewStart(jobSupervisor, dualDCSupport),
-			"stop":       NewStop(jobSupervisor, dualDCSupport),
+			"start":      NewStart(jobSupervisor, dualDCSupport, platform),
+			"stop":       NewStop(jobSupervisor, dualDCSupport, platform),
 			"drain":      NewDrain(notifier, specService, jobScriptProvider, jobSupervisor, logger),
 			"get_state":  NewGetState(settingsService, specService, jobSupervisor, vitalsService, ntpService),
 			"run_errand": NewRunErrand(specService, dirProvider.JobsDir(), platform.GetRunner(), logger),

@@ -108,7 +108,7 @@ func (app *app) Setup(args []string) error {
 		app.logger,
 	)
 
-	// wrap platform with nimbus specific features - Mount/Unmount persistentdisk
+	// wrap platform with nimbus specific features - Mount/Unmount persistent disk
 	platformWrapper := nimbus.NewPlatformWrapper(app.platform, app.dualDCSupport)
 	app.platform = platformWrapper
 

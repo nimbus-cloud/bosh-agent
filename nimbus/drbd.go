@@ -144,18 +144,24 @@ func (d DualDCSupport) DRBDUmount(mountPoint string) (didUnmount bool, err error
 	return
 }
 
-func (d DualDCSupport) createLvm() (err error) {
-
+func (d DualDCSupport) PersistentDiskSettings() (persistentDisk boshsettings.DiskSettings, found bool) {
 	settings := d.settingsService.GetSettings()
 
-	disks := settings.Disks.Persistent
-	if len(disks) != 1 {
-		return errors.New("DualDCSupport.createLvm(): expected exactly 1 persistent disk")
+	persistentDisks := settings.Disks.Persistent
+	if len(persistentDisks) == 1 {
+		for diskID := range persistentDisks {
+			persistentDisk, found = settings.PersistentDiskSettings(diskID)
+		}
 	}
 
-	var diskSettings boshsettings.DiskSettings
-	for diskID := range disks {
-		diskSettings, _ = settings.PersistentDiskSettings(diskID)
+	return
+}
+
+func (d DualDCSupport) createLvm() (err error) {
+
+	diskSettings, found := d.PersistentDiskSettings()
+	if !found {
+		return errors.New("DualDCSupport.createLvm(): persistent disk not found")
 	}
 
 	out, _, _, _ := d.cmdRunner.RunCommand("pvs")

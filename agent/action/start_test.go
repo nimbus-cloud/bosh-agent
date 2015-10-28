@@ -35,7 +35,7 @@ func init() {
 				settingsService,
 				logger,
 			)
-			action = NewStart(jobSupervisor, dualDCSupport)
+			action = NewStart(jobSupervisor, dualDCSupport, platform)
 		})
 
 		It("is synchronous", func() {

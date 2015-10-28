@@ -35,7 +35,7 @@ func init() {
 				settingsService,
 				logger,
 			)
-			action = NewStop(jobSupervisor, dualDCSupport)
+			action = NewStop(jobSupervisor, dualDCSupport, platform)
 		})
 
 		It("is asynchronous", func() {
