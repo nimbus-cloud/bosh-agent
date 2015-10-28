@@ -128,17 +128,17 @@ func (d DualDCSupport) DRBDMount(mountPoint string) (err error) {
 	return
 }
 
-func (d DualDCSupport) DRBDUmount(mountPoint string) (err error) {
+func (d DualDCSupport) DRBDUmount(mountPoint string) (didUnmount bool, err error) {
 	d.logger.Info(nimbusLogTag, "Drbd unmounting %s", mountPoint)
 
-	_, err = d.mounter.Unmount(mountPoint)
+	didUnmount, err = d.mounter.Unmount(mountPoint)
 	if err != nil {
-		return bosherr.WrapErrorf(err, "DRBDUmount() -> error calling mounter.Unmount(%s)", mountPoint)
+		return false, bosherr.WrapErrorf(err, "DRBDUmount() -> error calling mounter.Unmount(%s)", mountPoint)
 	}
 
 	err = d.drbdMakeSecondary()
 	if err != nil {
-		return bosherr.WrapError(err, "DRBDUmount() -> error calling drbdMakeSecondary")
+		return false, bosherr.WrapError(err, "DRBDUmount() -> error calling drbdMakeSecondary")
 	}
 
 	return

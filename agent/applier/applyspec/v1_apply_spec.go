@@ -113,6 +113,10 @@ func (s NetworkSpec) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Fields)
 }
 
-func (s V1ApplySpec) IsPassive() bool {
+func (s V1ApplySpec) IsPassiveSide() bool {
 	return s.Passive == "enabled"
+}
+
+func (s V1ApplySpec) IsActiveSide() bool {
+	return s.Passive == "disabled"
 }

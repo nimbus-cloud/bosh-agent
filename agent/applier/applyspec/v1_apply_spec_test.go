@@ -157,7 +157,8 @@ var _ = Describe("V1ApplySpec", func() {
 			}
 
 			Expect(spec).To(Equal(expectedSpec))
-			Expect(spec.IsPassive()).To(Equal(true))
+			Expect(spec.IsPassiveSide()).To(Equal(true))
+			Expect(spec.IsActiveSide()).To(Equal(false))
 		})
 	})
 
