@@ -148,6 +148,16 @@ func (d DualDCSupport) persistentDiskSettings() (persistentDisk boshsettings.Dis
 	return
 }
 
+func (d DualDCSupport) isPassiveSide() (passive bool, err error) {
+	spec, err := d.specService.Get()
+	if err != nil {
+		err = bosherr.WrapError(err, "Fetching spec")
+		return
+	}
+	passive = spec.IsPassiveSide()
+	return
+}
+
 func (d DualDCSupport) createLvm() (err error) {
 
 	diskSettings, found := d.persistentDiskSettings()
