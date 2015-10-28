@@ -1,6 +1,7 @@
 package nimbus
 
 import (
+	"errors"
 	boshdpresolv "github.com/cloudfoundry/bosh-agent/infrastructure/devicepathresolver"
 	"github.com/cloudfoundry/bosh-agent/platform"
 	"github.com/cloudfoundry/bosh-agent/platform/cert"
@@ -177,6 +178,16 @@ func (w PlatformWrapper) UnmountPersistentDisk(diskSettings boshsettings.DiskSet
 }
 
 func (w PlatformWrapper) MigratePersistentDisk(fromMountPoint, toMountPoint string) (err error) {
+
+	spec, err := w.dualDCSupport.specService.Get()
+	if err != nil {
+		return bosherr.WrapError(err, "getting spec to check if DRBD is enabled")
+	}
+
+	if spec.DrbdEnabled {
+		return errors.New("Migrating a drbd box is not supported.")
+	}
+
 	return w.platform.MigratePersistentDisk(fromMountPoint, toMountPoint)
 }
 
