@@ -5,6 +5,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/cloudfoundry/bosh-agent/agent/action"
+	fakeas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec/fakes"
 	fakejobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor/fakes"
 	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	fakeplatform "github.com/cloudfoundry/bosh-agent/platform/fakes"
@@ -20,6 +21,7 @@ func init() {
 			settingsService *fakesettings.FakeSettingsService
 			logger          boshlog.Logger
 			dualDCSupport   nimbus.DualDCSupport
+			specService     *fakeas.FakeV1Service
 			action          StartAction
 		)
 
@@ -28,10 +30,12 @@ func init() {
 			platform = fakeplatform.NewFakePlatform()
 			logger = boshlog.NewLogger(boshlog.LevelNone)
 			settingsService = &fakesettings.FakeSettingsService{}
+			specService = fakeas.NewFakeV1Service()
 			dualDCSupport = nimbus.NewDualDCSupport(
 				platform.GetRunner(),
 				platform.GetFs(),
 				platform.GetDirProvider(),
+				specService,
 				settingsService,
 				logger,
 			)

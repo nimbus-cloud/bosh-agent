@@ -104,6 +104,7 @@ func (app *app) Setup(args []string) error {
 		app.platform.GetRunner(),
 		app.platform.GetFs(),
 		app.dirProvider,
+		boshas.NewConcreteV1Service(app.platform.GetFs(), filepath.Join(app.dirProvider.BoshDir(), "spec.json")),
 		settingsService,
 		app.logger,
 	)

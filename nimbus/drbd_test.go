@@ -1,18 +1,62 @@
 package nimbus
 
 import (
+	"fmt"
+	boshas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec"
+	fakeas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec/fakes"
+	boshdir "github.com/cloudfoundry/bosh-agent/settings/directories"
+	fakesettings "github.com/cloudfoundry/bosh-agent/settings/fakes"
+	boshlog "github.com/cloudfoundry/bosh-utils/logger"
+	fakesys "github.com/cloudfoundry/bosh-utils/system/fakes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	//	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
-	//	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 )
 
 var _ = Describe("Nimbus", describeDrbd)
 
 func describeDrbd() {
 
+	var (
+		dualDCSupport   DualDCSupport
+		cmdRunner       *fakesys.FakeCmdRunner
+		fs              *fakesys.FakeFileSystem
+		dirProvider     boshdir.Provider
+		specService     *fakeas.FakeV1Service
+		settingsService *fakesettings.FakeSettingsService
+		logger          boshlog.Logger
+
+		spec boshas.V1ApplySpec
+	)
+
 	BeforeEach(func() {
+		fs = fakesys.NewFakeFileSystem()
+		cmdRunner = fakesys.NewFakeCmdRunner()
+		specService = fakeas.NewFakeV1Service()
+		settingsService = &fakesettings.FakeSettingsService{}
+		dirProvider = boshdir.NewProvider("/var/vcap")
+		logger = boshlog.NewLogger(boshlog.LevelNone)
+
+		dualDCSupport = NewDualDCSupport(
+			cmdRunner,
+			fs,
+			dirProvider,
+			specService,
+			settingsService,
+			logger,
+		)
+
+		spec = boshas.V1ApplySpec{}
+		spec.DrbdEnabled = true
+		spec.Passive = "enabled"
+		specService.Spec = spec
+	})
+
+	Context("DNS updates", func() {
+
+		It("", func() {
+			s, e := specService.Get()
+			fmt.Printf("spec: %#v, err: %v", s, e)
+		})
 
 	})
 

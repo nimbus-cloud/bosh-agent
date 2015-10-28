@@ -57,6 +57,7 @@ var _ = Describe("concreteFactory", func() {
 			platform.GetRunner(),
 			platform.GetFs(),
 			platform.GetDirProvider(),
+			specService,
 			settingsService,
 			logger,
 		)

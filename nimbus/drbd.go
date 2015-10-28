@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -37,11 +36,11 @@ func NewDualDCSupport(
 	cmdRunner boshsys.CmdRunner,
 	fs boshsys.FileSystem,
 	dirProvider boshdir.Provider,
+	specService boshas.V1Service,
 	settingsService boshsettings.Service,
 	logger boshlog.Logger,
 ) DualDCSupport {
 
-	specService := boshas.NewConcreteV1Service(fs, filepath.Join(dirProvider.BoshDir(), "spec.json"))
 	linuxMounter := boshdisk.NewLinuxMounter(cmdRunner, boshdisk.NewCmdMountsSearcher(cmdRunner), 1*time.Second)
 	linuxFormatter := boshdisk.NewLinuxFormatter(cmdRunner, fs)
 
