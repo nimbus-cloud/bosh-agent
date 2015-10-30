@@ -127,9 +127,14 @@ func (d DualDCSupport) unmountDRBD(mountPoint string) (didUnmount bool, err erro
 		return false, bosherr.WrapErrorf(err, "unmountDRBD() -> error calling mounter.Unmount(%s)", mountPoint)
 	}
 
-	err = d.drbdMakeSecondary()
-	if err != nil {
-		return false, bosherr.WrapError(err, "unmountDRBD() -> error calling drbdMakeSecondary")
+	// In certain scenarios drbd may not have been setup yet: non-drbd job changed to drbd-enabled job - OnStartAction
+	// un-mounts disk first (now drbd enabled according to job spec) but drbd has not been setup yet.
+	// It will be when the disk is mounted - hence the check below
+	if d.fs.FileExists(drbdConfigLocation) {
+		err = d.drbdMakeSecondary()
+		if err != nil {
+			return false, bosherr.WrapError(err, "unmountDRBD() -> error calling drbdMakeSecondary")
+		}
 	}
 
 	return
@@ -266,7 +271,7 @@ func (d DualDCSupport) writeDrbdConfig() (err error) {
 		otherHostIP,
 	)
 
-	err = d.fs.WriteFileString("/etc/drbd.d/r0.res", configBody)
+	err = d.fs.WriteFileString(drbdConfigLocation, configBody)
 
 	return
 }
@@ -281,6 +286,8 @@ func (d DualDCSupport) thisHostIP() (ip string, err error) {
 	// TODO: is this correct??? what if multiple networks are configured???
 	return ips[0], nil
 }
+
+const drbdConfigLocation = "/etc/drbd.d/r0.res"
 
 const nimbusLogTag = "Nimbus"
 
