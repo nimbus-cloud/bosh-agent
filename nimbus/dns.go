@@ -58,6 +58,8 @@ func (r DualDCSupport) dnsUpdatesEnabled() (enabled bool, err error) {
 func (r DualDCSupport) runPeriodicUpdates(cancelChan chan struct{}) {
 	tickChan := time.Tick(dnsUpdateInterval)
 
+	r.updateAllDNSServers()
+
 	for {
 		select {
 		case <-tickChan:
@@ -80,6 +82,7 @@ func (r DualDCSupport) updateAllDNSServers() (err error) {
 
 	dnsSpec := spec.PropertiesSpec.DNSSpec
 	if len(dnsSpec.DNSServers) == 0 || dnsSpec.Key == "" || dnsSpec.TTL == 0 {
+		r.logger.Error(nimbusLogTag, "dnsSpec.DNSServers or dnsSpec.Key or dnsSpec.TTL empty")
 		return errors.New("dnsSpec.DNSServers or dnsSpec.Key or dnsSpec.TTL empty")
 	}
 
