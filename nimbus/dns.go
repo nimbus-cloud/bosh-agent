@@ -13,6 +13,7 @@ import (
 const dnsUpdateInterval = 60 * time.Second
 
 func (r *DualDCSupport) StartDNSUpdatesIfRequired() (err error) {
+	r.logger.Debug(nimbusLogTag, "StartDNSUpdatesIfRequired - begin")
 	var enabled bool
 	if enabled, err = r.dnsUpdatesEnabled(); err != nil {
 		return
@@ -31,6 +32,7 @@ func (r *DualDCSupport) StartDNSUpdatesIfRequired() (err error) {
 }
 
 func (r *DualDCSupport) StopDNSUpdatesIfRequired() (err error) {
+	r.logger.Debug(nimbusLogTag, "StopDNSUpdatesIfRequired - begin")
 	var enabled bool
 	if enabled, err = r.dnsUpdatesEnabled(); err != nil {
 		return

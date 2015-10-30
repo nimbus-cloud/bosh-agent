@@ -57,6 +57,7 @@ func NewDualDCSupport(
 }
 
 func (d DualDCSupport) setupDRBD() (err error) {
+	d.logger.Info(nimbusLogTag, "setupDRBD - begin")
 
 	if err = d.writeDrbdConfig(); err != nil {
 		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling writeDrbdConfig()")

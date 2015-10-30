@@ -127,6 +127,7 @@ func (w PlatformWrapper) SetupRuntimeConfiguration() (err error) {
 // Disk management
 
 func (w PlatformWrapper) MountPersistentDisk(diskSettings boshsettings.DiskSettings, mountPoint string) error {
+	w.dualDCSupport.logger.Debug(nimbusLogTag, "MountPersistentDisk - begin")
 
 	spec, err := w.dualDCSupport.specService.Get()
 	if err != nil {
@@ -135,6 +136,7 @@ func (w PlatformWrapper) MountPersistentDisk(diskSettings boshsettings.DiskSetti
 
 	// DRBD logic
 	if spec.DrbdEnabled {
+		w.dualDCSupport.logger.Debug(nimbusLogTag, "MountPersistentDisk - drbd is enabled")
 
 		if err = w.dualDCSupport.setupDRBD(); err != nil {
 			return bosherr.WrapError(err, "setting up DRBD")
@@ -154,6 +156,7 @@ func (w PlatformWrapper) MountPersistentDisk(diskSettings boshsettings.DiskSetti
 }
 
 func (w PlatformWrapper) UnmountPersistentDisk(diskSettings boshsettings.DiskSettings) (didUnmount bool, err error) {
+	w.dualDCSupport.logger.Debug(nimbusLogTag, "UnmountPersistentDisk - begin")
 
 	spec, err := w.dualDCSupport.specService.Get()
 	if err != nil {
@@ -162,6 +165,7 @@ func (w PlatformWrapper) UnmountPersistentDisk(diskSettings boshsettings.DiskSet
 
 	// DRBD logic
 	if spec.DrbdEnabled {
+		w.dualDCSupport.logger.Debug(nimbusLogTag, "UnmountPersistentDisk - drbd is enabled")
 
 		// unmount only active side
 		if spec.IsActiveSide() {
