@@ -52,7 +52,7 @@ func (r DualDCSupport) dnsUpdatesEnabled() (enabled bool, err error) {
 		return false, bosherr.WrapError(err, "Fetching spec")
 	}
 
-	return spec.DNSRegisterOnStart != "", nil
+	return spec.IsActiveSide() && spec.DNSRegisterOnStart != "", nil
 }
 
 func (r DualDCSupport) runPeriodicUpdates(cancelChan chan struct{}) {
