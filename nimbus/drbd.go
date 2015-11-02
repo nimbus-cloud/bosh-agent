@@ -201,7 +201,7 @@ func (d DualDCSupport) createLvm() (err error) {
 		if _, err := d.mounter.Unmount(device); err != nil {
 			return bosherr.WrapError(err, "Unmounting device before creating logical volume")
 		}
-		if _, _, _, err := d.cmdRunner.RunCommand("lvcreate -n StoreData -l 40%FREE vgStoreData"); err != nil {
+		if _, _, _, err := d.cmdRunner.RunCommand("bash -c 'lvcreate -n StoreData -l 40%FREE vgStoreData'"); err != nil {
 			return bosherr.WrapError(err, "when running: lvcreate -n StoreData -l 40%FREE vgStoreData")
 		}
 	}
