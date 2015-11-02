@@ -73,7 +73,7 @@ func (a ActionHook) OnApplyAction() error {
 			return bosherr.WrapError(err, "setting up DRBD")
 		}
 
-		_, err = a.dualDCSupport.unmountDRBD(a.dualDCSupport.dirProvider.StoreDir())
+		_, err = a.dualDCSupport.unmountDRBD()
 		if err != nil {
 			return bosherr.WrapError(err, "DRBD unmounting persistent share")
 		}

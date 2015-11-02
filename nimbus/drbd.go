@@ -79,8 +79,11 @@ func (d DualDCSupport) setupDRBD() (err error) {
 	return
 }
 
-func (d DualDCSupport) mountDRBD(mountPoint string) (err error) {
-	d.logger.Info(nimbusLogTag, "Drbd mounting %s", mountPoint)
+// TODO: should this check if it is drbd mounted vs regular mount???
+func (d DualDCSupport) mountDRBD() (err error) {
+	d.logger.Info(nimbusLogTag, "Drbd mount - begin")
+
+	mountPoint := d.dirProvider.StoreDir()
 
 	isMounted, err := d.mounter.IsMounted(mountPoint)
 	if err != nil {
@@ -120,8 +123,10 @@ func (d DualDCSupport) mountDRBD(mountPoint string) (err error) {
 	return
 }
 
-func (d DualDCSupport) unmountDRBD(mountPoint string) (didUnmount bool, err error) {
-	d.logger.Info(nimbusLogTag, "Drbd unmounting %s", mountPoint)
+func (d DualDCSupport) unmountDRBD() (didUnmount bool, err error) {
+	d.logger.Info(nimbusLogTag, "Drbd unmount - begin")
+
+	mountPoint := d.dirProvider.StoreDir()
 
 	didUnmount, err = d.mounter.Unmount(mountPoint)
 	if err != nil {
@@ -179,15 +184,24 @@ func (d DualDCSupport) createLvm() (err error) {
 
 	out, _, _, _ := d.cmdRunner.RunCommand("pvs")
 	if !strings.Contains(out, device) {
-		d.cmdRunner.RunCommand("pvcreate", device)
-		d.cmdRunner.RunCommand("vgcreate", "vgStoreData", device)
+		if _, err = d.mounter.Unmount(device); err != nil {
+			return bosherr.WrapError(err, "Unmounting device before creating physical volume")
+		}
+		if _, _, _, err = d.cmdRunner.RunCommand("pvcreate", device); err != nil {
+			return bosherr.WrapError(err, "Creating physical volume")
+		}
+		if _, _, _, err := d.cmdRunner.RunCommand("vgcreate", "vgStoreData", device); err != nil {
+			return bosherr.WrapError(err, "Creating volume group")
+		}
 	}
 
 	out, _, _, _ = d.cmdRunner.RunCommand("lvs")
 	matchFound, _ := regexp.MatchString("StoreData\\s+vgStoreData", out)
 	if !matchFound {
-		_, _, _, err := d.cmdRunner.RunCommand("lvcreate -n StoreData -l 40%FREE vgStoreData")
-		if err != nil {
+		if _, err := d.mounter.Unmount(device); err != nil {
+			return bosherr.WrapError(err, "Unmounting device before creating logical volume")
+		}
+		if _, _, _, err := d.cmdRunner.RunCommand("lvcreate -n StoreData -l 40%FREE vgStoreData"); err != nil {
 			return bosherr.WrapError(err, "when running: lvcreate -n StoreData -l 40%FREE vgStoreData")
 		}
 	}
