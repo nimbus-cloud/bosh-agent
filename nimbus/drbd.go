@@ -182,7 +182,10 @@ func (d DualDCSupport) createLvm() (err error) {
 	out, _, _, _ = d.cmdRunner.RunCommand("lvs")
 	matchFound, _ := regexp.MatchString("StoreData\\s+vgStoreData", out)
 	if !matchFound {
-		d.cmdRunner.RunCommand("lvcreate -n StoreData -l 40%FREE vgStoreData")
+		_, _, _, err := d.cmdRunner.RunCommand("lvcreate -n StoreData -l 40%FREE vgStoreData")
+		if err != nil {
+			return bosherr.WrapError(err, "when running: lvcreate -n StoreData -l 40%FREE vgStoreData")
+		}
 	}
 
 	return
@@ -195,15 +198,16 @@ func (d DualDCSupport) createLvm() (err error) {
 
 func (d DualDCSupport) drbdCreatePartition() (err error) {
 
-	out, _, _, err := d.cmdRunner.RunCommand("drbdadm", "dstate", "r0")
-	if err != nil {
-		return
-	}
-	if !strings.HasPrefix(out, "Diskless") {
-		return
-	}
+	// TODO: looks like none of this is needed
+//	out, _, _, _ := d.cmdRunner.RunCommand("drbdadm dstate r0")
+//	if err != nil {
+//		return
+//	}
+//	if !strings.HasPrefix(out, "Diskless") {
+//		return
+//	}
 
-	out, _, _, err = d.cmdRunner.RunCommand("echo 'yes' | drbdadm dump-md r0")
+	out, _, _, err := d.cmdRunner.RunCommand("echo 'yes' | drbdadm dump-md r0")
 	//	if err != nil {
 	//		return bosherr.WrapErrorf(err, "Failure: drbdadm dump-md r0. Output: %s", out)
 	//	}
@@ -214,12 +218,12 @@ func (d DualDCSupport) drbdCreatePartition() (err error) {
 		}
 	}
 
-	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "down", "r0")
+	_, _, _, err = d.cmdRunner.RunCommand("drbdadm down r0")
 	if err != nil {
 		return
 	}
 
-	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "up", "r0")
+	_, _, _, err = d.cmdRunner.RunCommand("drbdadm up r0")
 
 	return
 }
