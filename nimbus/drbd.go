@@ -201,8 +201,8 @@ func (d DualDCSupport) createLvm() (err error) {
 		if _, err := d.mounter.Unmount(device); err != nil {
 			return bosherr.WrapError(err, "Unmounting device before creating logical volume")
 		}
-		if _, _, _, err := d.cmdRunner.RunCommand("bash -c 'lvcreate -n StoreData -l 40%FREE vgStoreData'"); err != nil {
-			return bosherr.WrapError(err, "when running: lvcreate -n StoreData -l 40%FREE vgStoreData")
+		if _, _, _, err := d.cmdRunner.RunCommand("/sbin/lvcreate -n StoreData -l 40%FREE vgStoreData"); err != nil {
+			return bosherr.WrapError(err, "when running: /sbin/lvcreate -n StoreData -l 40%FREE vgStoreData")
 		}
 	}
 
@@ -267,7 +267,7 @@ func (d DualDCSupport) drbdMakeSecondary() (err error) {
 
 	// TODO: invalidate on secondary ???
 	// drbdadm invalidate r0
-	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "secondary", "r0")
+	_, _, _, err = d.cmdRunner.RunCommand("drbdadm secondary r0")
 	return
 }
 
