@@ -202,6 +202,21 @@ func (w PlatformWrapper) IsMountPoint(path string) (result bool, err error) {
 }
 
 func (w PlatformWrapper) IsPersistentDiskMounted(diskSettings boshsettings.DiskSettings) (result bool, err error) {
+	w.dualDCSupport.logger.Debug(nimbusLogTag, "IsPersistentDiskMounted - begin")
+
+	spec, err := w.dualDCSupport.specService.Get()
+	if err != nil {
+		return false, bosherr.WrapError(err, "getting spec to check if DRBD is enabled")
+	}
+
+	if spec.DrbdEnabled {
+		if spec.IsPassiveSide() {
+			return true, nil
+		}
+
+		return w.dualDCSupport.mounter.IsMounted(w.dualDCSupport.dirProvider.StoreDir())
+	}
+
 	return w.platform.IsPersistentDiskMounted(diskSettings)
 }
 
