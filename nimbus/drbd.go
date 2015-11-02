@@ -67,9 +67,10 @@ func (d DualDCSupport) setupDRBD() (err error) {
 		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling createLvm()")
 	}
 
-	if err = d.drdbRestart(); err != nil {
-		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling drdbRestart()")
-	}
+	// looks like there is no need for this
+	//	if err = d.drdbRestart(); err != nil {
+	//		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling drdbRestart()")
+	//	}
 
 	if err = d.drbdCreatePartition(); err != nil {
 		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling drbdCreatePartition()")
@@ -165,15 +166,17 @@ func (d DualDCSupport) isPassiveSide() (passive bool, err error) {
 
 func (d DualDCSupport) createLvm() (err error) {
 
-	diskSettings, found := d.persistentDiskSettings()
-	if !found {
-		return errors.New("DualDCSupport.createLvm(): persistent disk not found")
-	}
+	//	diskSettings, found := d.persistentDiskSettings()
+	//	if !found {
+	//		return errors.New("DualDCSupport.createLvm(): persistent disk not found")
+	//	}
+
+	device := "/dev/sdc1"
 
 	out, _, _, _ := d.cmdRunner.RunCommand("pvs")
-	if !strings.Contains(out, diskSettings.Path) {
-		d.cmdRunner.RunCommand("pvcreate", diskSettings.Path)
-		d.cmdRunner.RunCommand("vgcreate", "vgStoreData", diskSettings.Path)
+	if !strings.Contains(out, device) {
+		d.cmdRunner.RunCommand("pvcreate", device)
+		d.cmdRunner.RunCommand("vgcreate", "vgStoreData", device)
 	}
 
 	out, _, _, _ = d.cmdRunner.RunCommand("lvs")
@@ -185,10 +188,10 @@ func (d DualDCSupport) createLvm() (err error) {
 	return
 }
 
-func (d DualDCSupport) drdbRestart() (err error) {
-	_, _, _, err = d.cmdRunner.RunCommand("/etc/init.d/drbd", "restart")
-	return
-}
+//func (d DualDCSupport) drdbRestart() (err error) {
+//	_, _, _, err = d.cmdRunner.RunCommand("/etc/init.d/drbd", "restart")
+//	return
+//}
 
 func (d DualDCSupport) drbdCreatePartition() (err error) {
 
@@ -200,10 +203,10 @@ func (d DualDCSupport) drbdCreatePartition() (err error) {
 		return
 	}
 
-	out, _, _, err = d.cmdRunner.RunCommand("drbdadm", "dump-md", "r0")
-	if err != nil {
-		return bosherr.WrapErrorf(err, "Failure: drbdadm dump-md r0. Output: %s", out)
-	}
+	out, _, _, err = d.cmdRunner.RunCommand("echo 'yes' | drbdadm dump-md r0")
+	//	if err != nil {
+	//		return bosherr.WrapErrorf(err, "Failure: drbdadm dump-md r0. Output: %s", out)
+	//	}
 	if strings.Contains(out, "No valid meta data found") {
 		_, _, _, err = d.cmdRunner.RunCommand("echo 'no' | drbdadm create-md r0")
 		if err != nil {
@@ -240,6 +243,8 @@ func (d DualDCSupport) drbdMakePrimary() (err error) {
 func (d DualDCSupport) drbdMakeSecondary() (err error) {
 	d.logger.Info(nimbusLogTag, "Drbd making secondary")
 
+	// TODO: invalidate on secondary ???
+	// drbdadm invalidate r0
 	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "secondary", "r0")
 	return
 }
