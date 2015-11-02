@@ -56,7 +56,7 @@ func NewFactory(
 
 			// Job management
 			"prepare":    NewPrepare(applier),
-			"apply":      NewApply(applier, specService, settingsService),
+			"apply":      NewApply(applier, specService, settingsService, dualDCSupport, platform),
 			"start":      NewStart(jobSupervisor, dualDCSupport, platform),
 			"stop":       NewStop(jobSupervisor, dualDCSupport, platform),
 			"drain":      NewDrain(notifier, specService, jobScriptProvider, jobSupervisor, logger),

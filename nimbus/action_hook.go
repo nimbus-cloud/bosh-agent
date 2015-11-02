@@ -40,6 +40,7 @@ func (a ActionHook) OnStartAction() error {
 	}
 
 	// we can not let bosh director to start services on a passive leg
+	// this in fact should never happen as bosh director understands active/passive
 	if passive {
 		return errors.New("Can not start services in passive mode!")
 	}
@@ -52,6 +53,31 @@ func (a ActionHook) OnStopAction() error {
 
 	if err := a.dualDCSupport.StopDNSUpdatesIfRequired(); err != nil {
 		return bosherr.WrapError(err, "Stopping DNS updates if required")
+	}
+
+	return nil
+}
+
+func (a ActionHook) OnApplyAction() error {
+	a.dualDCSupport.logger.Debug(nimbusLogTag, "OnApplyAction - begin")
+
+	spec, err := a.dualDCSupport.specService.Get()
+	if err != nil {
+		return bosherr.WrapError(err, "Fetching spec")
+	}
+
+	if spec.DrbdEnabled && !a.dualDCSupport.isDRBDConfigWritten() {
+		// need to set up DRBD here - when a passive job is deployed for the first time (spec applied) this
+		// is the only place when drbd can be set - OnStartAction is not called by the director for passive jobs
+		if err := a.dualDCSupport.setupDRBD(); err != nil {
+			return bosherr.WrapError(err, "setting up DRBD")
+		}
+
+		_, err = a.dualDCSupport.unmountDRBD(a.dualDCSupport.dirProvider.StoreDir())
+		if err != nil {
+			return bosherr.WrapError(err, "DRBD unmounting persistent share")
+		}
+
 	}
 
 	return nil

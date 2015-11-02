@@ -10,8 +10,11 @@ import (
 	boshas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec"
 	fakeas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec/fakes"
 	fakeappl "github.com/cloudfoundry/bosh-agent/agent/applier/fakes"
+	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
+	fakeplatform "github.com/cloudfoundry/bosh-agent/platform/fakes"
 	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
 	fakesettings "github.com/cloudfoundry/bosh-agent/settings/fakes"
+	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 )
 
 func init() {
@@ -20,6 +23,9 @@ func init() {
 			applier         *fakeappl.FakeApplier
 			specService     *fakeas.FakeV1Service
 			settingsService *fakesettings.FakeSettingsService
+			platform        *fakeplatform.FakePlatform
+			dualDCSupport   nimbus.DualDCSupport
+			logger          boshlog.Logger
 			action          ApplyAction
 		)
 
@@ -27,7 +33,18 @@ func init() {
 			applier = fakeappl.NewFakeApplier()
 			specService = fakeas.NewFakeV1Service()
 			settingsService = &fakesettings.FakeSettingsService{}
-			action = NewApply(applier, specService, settingsService)
+			platform = fakeplatform.NewFakePlatform()
+			logger = boshlog.NewLogger(boshlog.LevelNone)
+			dualDCSupport = nimbus.NewDualDCSupport(
+				platform.GetRunner(),
+				platform.GetFs(),
+				platform.GetDirProvider(),
+				specService,
+				settingsService,
+				logger,
+			)
+
+			action = NewApply(applier, specService, settingsService, dualDCSupport, platform)
 		})
 
 		It("apply should be asynchronous", func() {

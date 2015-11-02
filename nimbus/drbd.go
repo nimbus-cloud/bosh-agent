@@ -131,7 +131,7 @@ func (d DualDCSupport) unmountDRBD(mountPoint string) (didUnmount bool, err erro
 	// In certain scenarios drbd may not have been setup yet: non-drbd job changed to drbd-enabled job - OnStartAction
 	// un-mounts disk first (now drbd enabled according to job spec) but drbd has not been setup yet.
 	// It will be when the disk is mounted - hence the check below
-	if d.fs.FileExists(drbdConfigLocation) {
+	if d.isDRBDConfigWritten() {
 		err = d.drbdMakeSecondary()
 		if err != nil {
 			return false, bosherr.WrapError(err, "unmountDRBD() -> error calling drbdMakeSecondary")
@@ -139,6 +139,10 @@ func (d DualDCSupport) unmountDRBD(mountPoint string) (didUnmount bool, err erro
 	}
 
 	return
+}
+
+func (d DualDCSupport) isDRBDConfigWritten() bool {
+	return d.fs.FileExists(drbdConfigLocation)
 }
 
 func (d DualDCSupport) persistentDiskSettings() (persistentDisk boshsettings.DiskSettings, found bool) {
@@ -199,13 +203,13 @@ func (d DualDCSupport) createLvm() (err error) {
 func (d DualDCSupport) drbdCreatePartition() (err error) {
 
 	// TODO: looks like none of this is needed
-//	out, _, _, _ := d.cmdRunner.RunCommand("drbdadm dstate r0")
-//	if err != nil {
-//		return
-//	}
-//	if !strings.HasPrefix(out, "Diskless") {
-//		return
-//	}
+	//	out, _, _, _ := d.cmdRunner.RunCommand("drbdadm dstate r0")
+	//	if err != nil {
+	//		return
+	//	}
+	//	if !strings.HasPrefix(out, "Diskless") {
+	//		return
+	//	}
 
 	out, _, _, err := d.cmdRunner.RunCommand("echo 'yes' | drbdadm dump-md r0")
 	//	if err != nil {
