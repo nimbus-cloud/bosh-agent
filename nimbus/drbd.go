@@ -258,7 +258,7 @@ func (d DualDCSupport) drbdMakePrimary() (err error) {
 	if spec.DrbdForceMaster {
 		forceFlag = "--force"
 	}
-	_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "drbdadm", "primary", forceFlag, "r0")
+	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "primary", forceFlag, "r0")
 	return
 }
 
