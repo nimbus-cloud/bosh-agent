@@ -182,20 +182,20 @@ func (d DualDCSupport) createLvm() (err error) {
 
 	device := "/dev/sdc1"
 
-	out, _, _, _ := d.cmdRunner.RunCommand("sh", "-c", "pvs")
+	out, _, _, _ := d.cmdRunner.RunCommand("pvs")
 	if !strings.Contains(out, device) {
 		if _, err = d.mounter.Unmount(device); err != nil {
 			return bosherr.WrapError(err, "Unmounting device before creating physical volume")
 		}
-		if _, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "pvcreate", device); err != nil {
+		if _, _, _, err = d.cmdRunner.RunCommand("pvcreate", device); err != nil {
 			return bosherr.WrapError(err, "Creating physical volume")
 		}
-		if _, _, _, err := d.cmdRunner.RunCommand("sh", "-c", "vgcreate", "vgStoreData", device); err != nil {
+		if _, _, _, err := d.cmdRunner.RunCommand("vgcreate", "vgStoreData", device); err != nil {
 			return bosherr.WrapError(err, "Creating volume group")
 		}
 	}
 
-	out, _, _, _ = d.cmdRunner.RunCommand("sh", "-c", "lvs")
+	out, _, _, _ = d.cmdRunner.RunCommand("lvs")
 	matchFound, _ := regexp.MatchString("StoreData\\s+vgStoreData", out)
 	if !matchFound {
 		if _, err := d.mounter.Unmount(device); err != nil {
