@@ -225,7 +225,7 @@ func (d DualDCSupport) drbdCreatePartition() (err error) {
 	//		return
 	//	}
 
-	out, _, _, err := d.cmdRunner.RunCommand("sh", "-c", "echo 'yes' | drbdadm dump-md r0")
+	out, _, _, err := d.cmdRunner.RunCommand("sh", "-c", "echo 'yes' | drbdadm dump-md r0 2>&1")
 	//	if err != nil {
 	//		return bosherr.WrapErrorf(err, "Failure: drbdadm dump-md r0. Output: %s", out)
 	//	}
