@@ -182,20 +182,20 @@ func (d DualDCSupport) createLvm() (err error) {
 
 	device := "/dev/sdc1"
 
-	out, _, _, _ := d.cmdRunner.RunCommand("pvs")
+	out, _, _, _ := d.cmdRunner.RunCommand("sh", "-c", "pvs")
 	if !strings.Contains(out, device) {
 		if _, err = d.mounter.Unmount(device); err != nil {
 			return bosherr.WrapError(err, "Unmounting device before creating physical volume")
 		}
-		if _, _, _, err = d.cmdRunner.RunCommand("pvcreate", device); err != nil {
+		if _, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "pvcreate", device); err != nil {
 			return bosherr.WrapError(err, "Creating physical volume")
 		}
-		if _, _, _, err := d.cmdRunner.RunCommand("vgcreate", "vgStoreData", device); err != nil {
+		if _, _, _, err := d.cmdRunner.RunCommand("sh", "-c", "vgcreate", "vgStoreData", device); err != nil {
 			return bosherr.WrapError(err, "Creating volume group")
 		}
 	}
 
-	out, _, _, _ = d.cmdRunner.RunCommand("lvs")
+	out, _, _, _ = d.cmdRunner.RunCommand("sh", "-c", "lvs")
 	matchFound, _ := regexp.MatchString("StoreData\\s+vgStoreData", out)
 	if !matchFound {
 		if _, err := d.mounter.Unmount(device); err != nil {
@@ -225,23 +225,23 @@ func (d DualDCSupport) drbdCreatePartition() (err error) {
 	//		return
 	//	}
 
-	out, _, _, err := d.cmdRunner.RunCommand("echo 'yes' | drbdadm dump-md r0")
+	out, _, _, err := d.cmdRunner.RunCommand("sh", "-c", "echo 'yes' | drbdadm dump-md r0")
 	//	if err != nil {
 	//		return bosherr.WrapErrorf(err, "Failure: drbdadm dump-md r0. Output: %s", out)
 	//	}
 	if strings.Contains(out, "No valid meta data found") {
-		_, _, _, err = d.cmdRunner.RunCommand("echo 'no' | drbdadm create-md r0")
+		_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "echo 'no' | drbdadm create-md r0")
 		if err != nil {
 			return
 		}
 	}
 
-	_, _, _, err = d.cmdRunner.RunCommand("drbdadm down r0")
+	_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "drbdadm down r0")
 	if err != nil {
 		return
 	}
 
-	_, _, _, err = d.cmdRunner.RunCommand("drbdadm up r0")
+	_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "drbdadm up r0")
 
 	return
 }
@@ -258,16 +258,13 @@ func (d DualDCSupport) drbdMakePrimary() (err error) {
 	if spec.DrbdForceMaster {
 		forceFlag = "--force"
 	}
-	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "primary", forceFlag, "r0")
+	_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "drbdadm", "primary", forceFlag, "r0")
 	return
 }
 
 func (d DualDCSupport) drbdMakeSecondary() (err error) {
 	d.logger.Info(nimbusLogTag, "Drbd making secondary")
-
-	// TODO: invalidate on secondary ???
-	// drbdadm invalidate r0
-	_, _, _, err = d.cmdRunner.RunCommand("drbdadm secondary r0")
+	_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "drbdadm secondary r0")
 	return
 }
 
