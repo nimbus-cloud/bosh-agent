@@ -104,7 +104,7 @@ func (d DualDCSupport) mountDRBD() (err error) {
 		return bosherr.WrapError(err, "mountDRBD() -> error calling fs.MkdirAll()")
 	}
 
-	out, _, _, err := d.cmdRunner.RunCommand("file -s /dev/drbd1")
+	out, _, _, err := d.cmdRunner.RunCommand("sh", "-c", "file -s /dev/drbd1")
 	if err != nil {
 		return bosherr.WrapError(err, "mountDRBD() -> error checking if filesystem exists")
 	}
