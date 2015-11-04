@@ -39,12 +39,12 @@ func NewDualDCSupport(
 	specService boshas.V1Service,
 	settingsService boshsettings.Service,
 	logger boshlog.Logger,
-) DualDCSupport {
+) *DualDCSupport {
 
 	linuxMounter := boshdisk.NewLinuxMounter(cmdRunner, boshdisk.NewCmdMountsSearcher(cmdRunner), 1*time.Second)
 	linuxFormatter := boshdisk.NewLinuxFormatter(cmdRunner, fs)
 
-	return DualDCSupport{
+	return &DualDCSupport{
 		cmdRunner:       cmdRunner,
 		fs:              fs,
 		dirProvider:     dirProvider,

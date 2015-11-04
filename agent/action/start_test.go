@@ -20,7 +20,7 @@ func init() {
 			platform        *fakeplatform.FakePlatform
 			settingsService *fakesettings.FakeSettingsService
 			logger          boshlog.Logger
-			dualDCSupport   nimbus.DualDCSupport
+			dualDCSupport   *nimbus.DualDCSupport
 			specService     *fakeas.FakeV1Service
 			action          StartAction
 		)

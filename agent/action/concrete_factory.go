@@ -32,7 +32,7 @@ func NewFactory(
 	jobSupervisor boshjobsuper.JobSupervisor,
 	specService boshas.V1Service,
 	jobScriptProvider boshscript.JobScriptProvider,
-	dualDCSupport nimbus.DualDCSupport,
+	dualDCSupport *nimbus.DualDCSupport,
 	logger boshlog.Logger,
 ) (factory Factory) {
 	compressor := platform.GetCompressor()

@@ -38,7 +38,7 @@ var _ = Describe("concreteFactory", func() {
 		jobScriptProvider boshscript.JobScriptProvider
 		factory           Factory
 		logger            boshlog.Logger
-		dualDCSupport     nimbus.DualDCSupport
+		dualDCSupport     *nimbus.DualDCSupport
 	)
 
 	BeforeEach(func() {

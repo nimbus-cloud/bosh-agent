@@ -14,7 +14,7 @@ type StopAction struct {
 	actionHook    nimbus.ActionHook
 }
 
-func NewStop(jobSupervisor boshjobsuper.JobSupervisor, dualDCSupport nimbus.DualDCSupport, platform boshplatform.Platform) (stop StopAction) {
+func NewStop(jobSupervisor boshjobsuper.JobSupervisor, dualDCSupport *nimbus.DualDCSupport, platform boshplatform.Platform) (stop StopAction) {
 	stop = StopAction{
 		jobSupervisor: jobSupervisor,
 		actionHook:    nimbus.NewActionHook(platform, dualDCSupport),

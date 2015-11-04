@@ -17,7 +17,7 @@ var _ = Describe("Nimbus", describeDrbd)
 func describeDrbd() {
 
 	var (
-		dualDCSupport   DualDCSupport
+		dualDCSupport   *DualDCSupport
 		cmdRunner       *fakesys.FakeCmdRunner
 		fs              *fakesys.FakeFileSystem
 		dirProvider     boshdir.Provider

@@ -51,7 +51,7 @@ type app struct {
 	fs            boshsys.FileSystem
 	logTag        string
 	dirProvider   boshdirs.Provider
-	dualDCSupport nimbus.DualDCSupport
+	dualDCSupport *nimbus.DualDCSupport
 }
 
 func New(logger boshlog.Logger, fs boshsys.FileSystem) App {

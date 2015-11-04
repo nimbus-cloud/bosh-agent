@@ -21,7 +21,7 @@ func init() {
 			settingsService *fakesettings.FakeSettingsService
 			logger          boshlog.Logger
 			specService     *fakeas.FakeV1Service
-			dualDCSupport   nimbus.DualDCSupport
+			dualDCSupport   *nimbus.DualDCSupport
 			action          StopAction
 		)
 

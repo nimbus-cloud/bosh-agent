@@ -22,7 +22,7 @@ func NewApply(
 	applier boshappl.Applier,
 	specService boshas.V1Service,
 	settingsService boshsettings.Service,
-	dualDCSupport nimbus.DualDCSupport,
+	dualDCSupport *nimbus.DualDCSupport,
 	platform boshplatform.Platform,
 ) (action ApplyAction) {
 	action.applier = applier

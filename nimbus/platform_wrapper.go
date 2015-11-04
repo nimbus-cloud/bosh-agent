@@ -17,10 +17,10 @@ var _ platform.Platform = (*PlatformWrapper)(nil)
 
 type PlatformWrapper struct {
 	platform      platform.Platform
-	dualDCSupport DualDCSupport
+	dualDCSupport *DualDCSupport
 }
 
-func NewPlatformWrapper(platform platform.Platform, dualDCSupport DualDCSupport) platform.Platform {
+func NewPlatformWrapper(platform platform.Platform, dualDCSupport *DualDCSupport) platform.Platform {
 	return PlatformWrapper{platform: platform, dualDCSupport: dualDCSupport}
 }
 

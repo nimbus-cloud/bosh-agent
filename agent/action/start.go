@@ -14,7 +14,7 @@ type StartAction struct {
 	actionHook    nimbus.ActionHook
 }
 
-func NewStart(jobSupervisor boshjobsuper.JobSupervisor, dualDCSupport nimbus.DualDCSupport, platform boshplatform.Platform) (start StartAction) {
+func NewStart(jobSupervisor boshjobsuper.JobSupervisor, dualDCSupport *nimbus.DualDCSupport, platform boshplatform.Platform) (start StartAction) {
 	start = StartAction{
 		jobSupervisor: jobSupervisor,
 		actionHook:    nimbus.NewActionHook(platform, dualDCSupport),
