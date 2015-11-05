@@ -201,6 +201,9 @@ func (w PlatformWrapper) IsMountPoint(path string) (result bool, err error) {
 	return w.platform.IsMountPoint(path)
 }
 
+// for drbd enabled nodes checking if disk is mounted based on boshsettings.DiskSettings does not work.
+// need to use /var/vcap/store to see if active side is mounted, returning true for passive side.
+
 func (w PlatformWrapper) IsPersistentDiskMounted(diskSettings boshsettings.DiskSettings) (result bool, err error) {
 	w.dualDCSupport.logger.Debug(nimbusLogTag, "IsPersistentDiskMounted - begin")
 

@@ -17,8 +17,6 @@ import (
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
 )
 
-// TODO: test DNS - local DNS server??? fake?
-// TODO: pointer receiver for methods? Pass DualDCSupport instance as pointer???
 
 type DualDCSupport struct {
 	cmdRunner       boshsys.CmdRunner
@@ -259,6 +257,9 @@ func (d DualDCSupport) drbdMakePrimary() (err error) {
 		forceFlag = "--force"
 	}
 	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "primary", forceFlag, "r0")
+
+	// TODO: run ???: drbdadm connect all
+
 	return
 }
 
