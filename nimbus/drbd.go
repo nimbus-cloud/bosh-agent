@@ -258,14 +258,23 @@ func (d DualDCSupport) drbdMakePrimary() (err error) {
 	}
 	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "primary", forceFlag, "r0")
 
-	// TODO: run ???: drbdadm connect all
+	// TODO: run ???: drbdadm apply all
+	// TODO: run ???: drbdadm connect r0
 
 	return
 }
 
+// TODO: make secondary only if both sides are in sync - run online verification before
+// making secondary and wait for sync to finish if needed ???
+// TODO: cron to do online verification on regular basis???
+// drbdadm verify r0
+// If out-of-sync blocks are found they are not synced automatically, need to run:
+// drbdadm disconnect r0
+// drbdadm connect r0
 func (d DualDCSupport) drbdMakeSecondary() (err error) {
 	d.logger.Info(nimbusLogTag, "Drbd making secondary")
 	_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "drbdadm secondary r0")
+	// TODO: run ???: drbdadm apply all
 	return
 }
 
@@ -315,6 +324,10 @@ func (d DualDCSupport) thisHostIP() (ip string, err error) {
 const drbdConfigLocation = "/etc/drbd.d/r0.res"
 
 const nimbusLogTag = "Nimbus"
+
+// TODO: add data-integrity-alg sha1; to net section??? kind of makes sense with A protocol???
+// TODO: split brain hanlder: split-brain "/usr/lib/drbd/notify-split-brain.sh root";
+// TODO: congestion policy: https://drbd.linbit.com/users-guide/s-configure-congestion-policy.html
 
 const drbdConfigTemplate = `
 resource r0 {
