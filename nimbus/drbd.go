@@ -17,7 +17,6 @@ import (
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
 )
 
-
 type DualDCSupport struct {
 	cmdRunner       boshsys.CmdRunner
 	fs              boshsys.FileSystem
@@ -261,17 +260,25 @@ func (d DualDCSupport) drbdMakePrimary() (err error) {
 	return
 }
 
-// TODO: make secondary only if both sides are in sync - run online verification before
-// making secondary and wait for sync to finish if needed ???
-// TODO: cron to do online verification on regular basis???
-// drbdadm verify r0
-// If out-of-sync blocks are found they are not synced automatically, need to run:
-// drbdadm disconnect r0
-// drbdadm connect r0
 func (d DualDCSupport) drbdMakeSecondary() (err error) {
 	d.logger.Info(nimbusLogTag, "Drbd making secondary")
+
+	// make sure that dstate is UpToDate on both sides
+	for i := 0; i <= 10; i++ {
+		d.logger.Debug(nimbusLogTag, "Checking if both sides are in sync before demoting to secondary")
+		out, _, _, err := d.cmdRunner.RunCommand("sh", "-c", "drbdadm dstate r0")
+		if err != nil {
+			return bosherr.WrapError(err, "Checking 'drbdadm dstate r0' before making secondary")
+		}
+		if out == "UpToDate/UpToDate" {
+			break
+		}
+		if i == 10 {
+			return errors.New("Checked 'drbdadm dstate r0' 10 times, still not in sync, can not make secondary...")
+		}
+		time.Sleep(3 * time.Second)
+	}
 	_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "drbdadm secondary r0")
-	// TODO: run ???: drbdadm apply all
 	return
 }
 
