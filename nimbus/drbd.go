@@ -252,14 +252,11 @@ func (d DualDCSupport) drbdMakePrimary() (err error) {
 		return
 	}
 
-	forceFlag := ""
 	if spec.DrbdForceMaster {
-		forceFlag = "--force"
+		_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "drbdadm primary --force r0")
+	} else {
+		_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "drbdadm primary r0")
 	}
-	_, _, _, err = d.cmdRunner.RunCommand("drbdadm", "primary", forceFlag, "r0")
-
-	// TODO: run ???: drbdadm apply all
-	// TODO: run ???: drbdadm connect r0
 
 	return
 }
