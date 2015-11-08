@@ -270,7 +270,7 @@ func (d DualDCSupport) drbdMakeSecondary() (err error) {
 		if err != nil {
 			return bosherr.WrapError(err, "Checking 'drbdadm dstate r0' before making secondary")
 		}
-		if out == "UpToDate/UpToDate" {
+		if matchFound, _ := regexp.MatchString("UpToDate/UpToDate", out); matchFound {
 			break
 		}
 		if i == 10 {
