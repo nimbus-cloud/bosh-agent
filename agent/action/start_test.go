@@ -4,8 +4,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"errors"
 	. "github.com/cloudfoundry/bosh-agent/agent/action"
 	fakeas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec/fakes"
+	fakeappl "github.com/cloudfoundry/bosh-agent/agent/applier/fakes"
 	fakejobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor/fakes"
 	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	fakeplatform "github.com/cloudfoundry/bosh-agent/platform/fakes"
@@ -17,20 +19,23 @@ func init() {
 	Describe("Start", func() {
 		var (
 			jobSupervisor   *fakejobsuper.FakeJobSupervisor
+			applier         *fakeappl.FakeApplier
+			specService     *fakeas.FakeV1Service
 			platform        *fakeplatform.FakePlatform
 			settingsService *fakesettings.FakeSettingsService
 			logger          boshlog.Logger
 			dualDCSupport   *nimbus.DualDCSupport
-			specService     *fakeas.FakeV1Service
 			action          StartAction
 		)
 
 		BeforeEach(func() {
 			jobSupervisor = fakejobsuper.NewFakeJobSupervisor()
+			applier = fakeappl.NewFakeApplier()
+			specService = fakeas.NewFakeV1Service()
+			action = NewStart(jobSupervisor, applier, specService, dualDCSupport, platform)
 			platform = fakeplatform.NewFakePlatform()
 			logger = boshlog.NewLogger(boshlog.LevelNone)
 			settingsService = &fakesettings.FakeSettingsService{}
-			specService = fakeas.NewFakeV1Service()
 			dualDCSupport = nimbus.NewDualDCSupport(
 				platform.GetRunner(),
 				platform.GetFs(),
@@ -39,7 +44,7 @@ func init() {
 				settingsService,
 				logger,
 			)
-			action = NewStart(jobSupervisor, dualDCSupport, platform)
+			action = NewStart(jobSupervisor, applier, specService, dualDCSupport, platform)
 		})
 
 		It("is synchronous", func() {
@@ -60,6 +65,20 @@ func init() {
 			_, err := action.Run()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(jobSupervisor.Started).To(BeTrue())
+		})
+
+		It("configures jobs", func() {
+			_, err := action.Run()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(applier.Configured).To(BeTrue())
+		})
+
+		It("apply errs if a job fails configuring", func() {
+			applier.ConfiguredError = errors.New("fake error")
+			_, err := action.Run()
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Configuring jobs"))
 		})
 	})
 }

@@ -3,6 +3,8 @@ package action
 import (
 	"errors"
 
+	boshappl "github.com/cloudfoundry/bosh-agent/agent/applier"
+	boshas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec"
 	boshjobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor"
 	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	boshplatform "github.com/cloudfoundry/bosh-agent/platform"
@@ -11,12 +13,16 @@ import (
 
 type StartAction struct {
 	jobSupervisor boshjobsuper.JobSupervisor
+	applier       boshappl.Applier
+	specService   boshas.V1Service
 	actionHook    nimbus.ActionHook
 }
 
-func NewStart(jobSupervisor boshjobsuper.JobSupervisor, dualDCSupport *nimbus.DualDCSupport, platform boshplatform.Platform) (start StartAction) {
+func NewStart(jobSupervisor boshjobsuper.JobSupervisor, applier boshappl.Applier, specService boshas.V1Service, dualDCSupport *nimbus.DualDCSupport, platform boshplatform.Platform) (start StartAction) {
 	start = StartAction{
 		jobSupervisor: jobSupervisor,
+		specService:   specService,
+		applier:       applier,
 		actionHook:    nimbus.NewActionHook(platform, dualDCSupport),
 	}
 	return
@@ -34,6 +40,18 @@ func (a StartAction) Run() (value string, err error) {
 
 	if err = a.actionHook.OnStartAction(); err != nil {
 		err = bosherr.WrapError(err, "calling nimbus on start hook")
+		return
+	}
+
+	desiredApplySpec, err := a.specService.Get()
+	if err != nil {
+		err = bosherr.WrapError(err, "Getting apply spec")
+		return
+	}
+
+	err = a.applier.ConfigureJobs(desiredApplySpec)
+	if err != nil {
+		err = bosherr.WrapErrorf(err, "Configuring jobs")
 		return
 	}
 

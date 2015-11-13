@@ -172,13 +172,13 @@ var _ = Describe("concreteFactory", func() {
 	It("start", func() {
 		action, err := factory.Create("start")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(action).To(Equal(NewStart(jobSupervisor, dualDCSupport, platform)))
+		Expect(action).To(Equal(NewStart(jobSupervisor, applier, specService, dualDCSupport, platform)))
 	})
 
 	It("stop", func() {
-		action, err := factory.Create("start")
+		action, err := factory.Create("stop")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(action).To(Equal(NewStart(jobSupervisor, dualDCSupport, platform)))
+		Expect(action).To(Equal(NewStop(jobSupervisor, dualDCSupport, platform)))
 	})
 
 	It("unmount_disk", func() {
