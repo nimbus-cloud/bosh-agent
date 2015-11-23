@@ -78,11 +78,18 @@ func (a GetStateAction) Run(filters ...string) (GetStateV1ApplySpec, error) {
 
 	settings := a.settingsService.GetSettings()
 
+	jobStatus := ""
+	if spec.IsPassiveSide() {
+		jobStatus = "passive"
+	} else {
+		jobStatus = a.jobSupervisor.Status()
+	}
+
 	value := GetStateV1ApplySpec{
 		spec,
 		settings.AgentID,
 		"1",
-		a.jobSupervisor.Status(),
+		jobStatus,
 		vitalsReference,
 		processes,
 		settings.VM,
