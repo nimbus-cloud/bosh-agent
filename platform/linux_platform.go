@@ -759,6 +759,7 @@ func (p linux) MountPersistentDisk(diskSetting boshsettings.DiskSettings, mountP
 		realPath = partitionPath
 	}
 
+	realPath, _ = p.checkForLvm(realPath)
 	err = p.diskManager.GetMounter().Mount(realPath, mountPoint)
 	if err != nil {
 		return bosherr.WrapError(err, "Mounting partition")
@@ -782,7 +783,24 @@ func (p linux) UnmountPersistentDisk(diskSettings boshsettings.DiskSettings) (bo
 		realPath += "1"
 	}
 
+	_, realPath = p.checkForLvm(realPath)
+
 	return p.diskManager.GetMounter().Unmount(realPath)
+}
+
+// lvm volumes (DRBD) need special treatment, device path need to change
+func (p linux) checkForLvm(realPath string) (devicePath, mountPath string) {
+	stdout, _, _, err := p.cmdRunner.RunCommand("blkid", "-p", realPath)
+	if err != nil {
+		p.logger.Error(logTag, "Error checking for lvm on device: %s, err: %s", realPath, err)
+		return realPath, p.dirProvider.StoreDir()
+	}
+
+	if strings.Contains(stdout, ` TYPE="LVM2_member"`) {
+		return "/dev/dm-0", p.dirProvider.StoreDir()
+	}
+
+	return realPath, p.dirProvider.StoreDir()
 }
 
 func (p linux) GetEphemeralDiskPath(diskSettings boshsettings.DiskSettings) string {
@@ -847,6 +865,8 @@ func (p linux) IsPersistentDiskMounted(diskSettings boshsettings.DiskSettings) (
 	if !p.options.UsePreformattedPersistentDisk {
 		realPath += "1"
 	}
+
+	_, realPath = p.checkForLvm(realPath)
 
 	return p.diskManager.GetMounter().IsMounted(realPath)
 }
