@@ -51,5 +51,5 @@ func (f linuxFormatter) partitionHasGivenType(partitionPath string, fsType FileS
 		return false
 	}
 
-	return strings.Contains(stdout, fmt.Sprintf(` TYPE="%s"`, fsType))
+	return strings.Contains(stdout, fmt.Sprintf(` TYPE="%s"`, fsType)) || strings.Contains(stdout, ` TYPE="LVM2_member"`)
 }
