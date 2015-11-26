@@ -797,6 +797,8 @@ func (p linux) checkForLvm(realPath string) (devicePath, mountPath string) {
 	}
 
 	if strings.Contains(stdout, ` TYPE="LVM2_member"`) {
+		stdout, _, _, _ := p.cmdRunner.RunCommand("blkid")
+		p.logger.Info(logTag, "Lvm partition detected, blkid output: %s", stdout)
 		return "/dev/dm-0", p.dirProvider.StoreDir()
 	}
 
