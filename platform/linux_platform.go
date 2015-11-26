@@ -798,30 +798,25 @@ func (p linux) checkForLvm(realPath string) (devicePath, mountPath string) {
 
 	if strings.Contains(stdout, ` TYPE="LVM2_member"`) {
 		lvmDevice := "/dev/mapper/vgStoreData-StoreData"
-		for i := 0; i <= 10; i++ {
-			stdout, stderr, _, err := p.cmdRunner.RunCommand("blkid", "-p", lvmDevice)
-			if err != nil {
-				p.logger.Info(logTag, "Lvm device: %s not found, output: %s, stderr: %s, error: %s", lvmDevice, stdout, stderr, err)
+		stdout, stderr, _, err := p.cmdRunner.RunCommand("blkid", "-p", lvmDevice)
+		if err != nil {
+			p.logger.Info(logTag, "Lvm device: %s not found, output: %s, stderr: %s", lvmDevice, stdout, stderr)
 
-				stdout, stderr, _, err := p.cmdRunner.RunCommand("vgchange -a y vgStoreData")
-				p.logger.Info(logTag, "vgchange -a y vgStoreData, stdout: %s, stderr: %s, err: %s", stdout, stderr, err)
+			// not really sure which of the below commands fixes it, running all of them
+			stdout, stderr, _, _ := p.cmdRunner.RunCommand("sh", "-c", "vgchange -a y vgStoreData")
+			p.logger.Info(logTag, "vgchange -a y vgStoreData, stdout: %s, stderr: %s", stdout, stderr)
 
-				stdout, stderr, _, err = p.cmdRunner.RunCommand("vgscan --mknodes -v")
-				p.logger.Info(logTag, "vgscan --mknodes -v, output: %s, stderr: %s, err: %s", stdout, stderr, err)
+			stdout, stderr, _, _ = p.cmdRunner.RunCommand("sh", "-c", "vgscan --mknodes -v")
+			p.logger.Info(logTag, "vgscan --mknodes -v, output: %s, stderr: %s", stdout, stderr)
 
-				stdout, stderr, _, err = p.cmdRunner.RunCommand("pvscan")
-				p.logger.Info(logTag, "pvscan, output: %s, stderr: %s, err: %s", stdout, stderr, err)
+			stdout, stderr, _, _ = p.cmdRunner.RunCommand("sh", "-c", "pvscan")
+			p.logger.Info(logTag, "pvscan, output: %s, stderr: %s", stdout, stderr)
 
-				stdout, stderr, _, err = p.cmdRunner.RunCommand("vgscan")
-				p.logger.Info(logTag, "vgscan, output: %s, stderr: %s, err: %s", stdout, stderr, err)
+			stdout, stderr, _, _ = p.cmdRunner.RunCommand("sh", "-c", "vgscan")
+			p.logger.Info(logTag, "vgscan, output: %s, stderr: %s", stdout, stderr)
 
-				stdout, stderr, _, err = p.cmdRunner.RunCommand("lvscan")
-				p.logger.Info(logTag, "lvscan, output: %s, stderr: %s, err: %s", stdout, stderr, err)
-
-				time.Sleep(2 * time.Second)
-			} else {
-				break
-			}
+			stdout, stderr, _, _ = p.cmdRunner.RunCommand("sh", "-c", "lvscan")
+			p.logger.Info(logTag, "lvscan, output: %s, stderr: %s", stdout, stderr)
 		}
 
 		return lvmDevice, p.dirProvider.StoreDir()
