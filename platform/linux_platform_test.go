@@ -1365,7 +1365,7 @@ Number  Start   End     Size    File system  Name             Flags
 			}
 
 			Context("UsePreformattedPersistentDisk is set to false", func() {
-				ItUnmountsPersistentDisk("fake-real-device-path1") // note partition '1'
+				ItUnmountsPersistentDisk("/fake-dir/store") // note partition '1'
 			})
 
 			Context("UsePreformattedPersistentDisk is set to true", func() {
@@ -1373,7 +1373,7 @@ Number  Start   End     Size    File system  Name             Flags
 					options.UsePreformattedPersistentDisk = true
 				})
 
-				ItUnmountsPersistentDisk("fake-real-device-path") // note no '1'; no partitions
+				ItUnmountsPersistentDisk("/fake-dir/store") // note no '1'; no partitions
 			})
 		})
 
@@ -1541,7 +1541,7 @@ Number  Start   End     Size    File system  Name             Flags
 			}
 
 			Context("UsePreformattedPersistentDisk is set to false", func() {
-				ItChecksPersistentDiskMountPoint("fake-real-device-path1") // note partition '1'
+				ItChecksPersistentDiskMountPoint("/fake-dir/store") // note partition '1'
 			})
 
 			Context("UsePreformattedPersistentDisk is set to true", func() {
@@ -1549,7 +1549,7 @@ Number  Start   End     Size    File system  Name             Flags
 					options.UsePreformattedPersistentDisk = true
 				})
 
-				ItChecksPersistentDiskMountPoint("fake-real-device-path") // note no '1'; no partitions
+				ItChecksPersistentDiskMountPoint("/fake-dir/store") // note no '1'; no partitions
 			})
 		})
 
