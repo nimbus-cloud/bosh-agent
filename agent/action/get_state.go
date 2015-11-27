@@ -5,6 +5,7 @@ import (
 
 	boshas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec"
 	boshjobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor"
+	boshplatform "github.com/cloudfoundry/bosh-agent/platform"
 	boshntp "github.com/cloudfoundry/bosh-agent/platform/ntp"
 	boshvitals "github.com/cloudfoundry/bosh-agent/platform/vitals"
 	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
@@ -17,6 +18,7 @@ type GetStateAction struct {
 	jobSupervisor   boshjobsuper.JobSupervisor
 	vitalsService   boshvitals.Service
 	ntpService      boshntp.Service
+	platform        boshplatform.Platform
 }
 
 func NewGetState(
@@ -25,12 +27,14 @@ func NewGetState(
 	jobSupervisor boshjobsuper.JobSupervisor,
 	vitalsService boshvitals.Service,
 	ntpService boshntp.Service,
+	platform boshplatform.Platform,
 ) (action GetStateAction) {
 	action.settingsService = settingsService
 	action.specService = specService
 	action.jobSupervisor = jobSupervisor
 	action.vitalsService = vitalsService
 	action.ntpService = ntpService
+	action.platform = platform
 	return
 }
 
@@ -52,6 +56,14 @@ type GetStateV1ApplySpec struct {
 	Processes    []boshjobsuper.Process `json:"processes,omitempty"`
 	VM           boshsettings.VM        `json:"vm"`
 	Ntp          boshntp.Info           `json:"ntp"`
+	Drbd         Drbd                   `json:"drbd"`
+}
+
+type Drbd struct {
+	ConnectionState string `json:"connection_state"`
+	Role            string `json:"role"`
+	DiskState       string `json:"disk_state"`
+	SyncState       string `json:"sync_state"`
 }
 
 func (a GetStateAction) Run(filters ...string) (GetStateV1ApplySpec, error) {
@@ -94,6 +106,7 @@ func (a GetStateAction) Run(filters ...string) (GetStateV1ApplySpec, error) {
 		processes,
 		settings.VM,
 		a.ntpService.GetInfo(),
+		a.DrbdInfo(),
 	}
 
 	if value.NetworkSpecs == nil {
@@ -107,6 +120,23 @@ func (a GetStateAction) Run(filters ...string) (GetStateV1ApplySpec, error) {
 	}
 
 	return value, nil
+}
+
+func (a GetStateAction) DrbdInfo() (drbd Drbd) {
+	if a.platform.GetFs().FileExists("/proc/drbd") {
+		stdout, _, _, _ := a.platform.GetRunner().RunCommand("sh", "-c", "drbdadm cstate r0 2>&1")
+		drbd.ConnectionState = stdout
+
+		stdout, _, _, _ = a.platform.GetRunner().RunCommand("sh", "-c", "drbdadm role r0 2>&1")
+		drbd.Role = stdout
+
+		stdout, _, _, _ = a.platform.GetRunner().RunCommand("sh", "-c", "drbdadm dstate r0 2>&1")
+		drbd.DiskState = stdout
+	} else {
+		drbd.ConnectionState = "not running"
+	}
+
+	return
 }
 
 func (a GetStateAction) Resume() (interface{}, error) {

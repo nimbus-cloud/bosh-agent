@@ -11,6 +11,7 @@ import (
 	fakeas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec/fakes"
 	boshjobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor"
 	fakejobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor/fakes"
+	fakeplatform "github.com/cloudfoundry/bosh-agent/platform/fakes"
 	boshntp "github.com/cloudfoundry/bosh-agent/platform/ntp"
 	fakentp "github.com/cloudfoundry/bosh-agent/platform/ntp/fakes"
 	boshvitals "github.com/cloudfoundry/bosh-agent/platform/vitals"
@@ -26,6 +27,7 @@ var _ = Describe("GetState", func() {
 		specService     *fakeas.FakeV1Service
 		jobSupervisor   *fakejobsuper.FakeJobSupervisor
 		vitalsService   *fakevitals.FakeService
+		platform        *fakeplatform.FakePlatform
 		action          GetStateAction
 	)
 
@@ -34,13 +36,14 @@ var _ = Describe("GetState", func() {
 		jobSupervisor = fakejobsuper.NewFakeJobSupervisor()
 		specService = fakeas.NewFakeV1Service()
 		vitalsService = fakevitals.NewFakeService()
+		platform = fakeplatform.NewFakePlatform()
 		ntpService := &fakentp.FakeService{
 			GetOffsetNTPOffset: boshntp.Info{
 				Offset:    "0.34958",
 				Timestamp: "12 Oct 17:37:58",
 			},
 		}
-		action = NewGetState(settingsService, specService, jobSupervisor, vitalsService, ntpService)
+		action = NewGetState(settingsService, specService, jobSupervisor, vitalsService, ntpService, platform)
 	})
 
 	It("get state should be synchronous", func() {
@@ -78,6 +81,7 @@ var _ = Describe("GetState", func() {
 							Offset:    "0.34958",
 							Timestamp: "12 Oct 17:37:58",
 						},
+						Drbd: Drbd{ConnectionState: "not running"},
 					}
 					expectedSpec.Deployment = "fake-deployment"
 

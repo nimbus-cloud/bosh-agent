@@ -118,7 +118,7 @@ var _ = Describe("concreteFactory", func() {
 		ntpService := boshntp.NewConcreteService(platform.GetFs(), platform.GetDirProvider())
 		action, err := factory.Create("get_state")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(action).To(Equal(NewGetState(settingsService, specService, jobSupervisor, platform.GetVitalsService(), ntpService)))
+		Expect(action).To(Equal(NewGetState(settingsService, specService, jobSupervisor, platform.GetVitalsService(), ntpService, platform)))
 	})
 
 	It("list_disk", func() {

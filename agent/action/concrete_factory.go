@@ -60,7 +60,7 @@ func NewFactory(
 			"start":      NewStart(jobSupervisor, applier, specService, dualDCSupport, platform),
 			"stop":       NewStop(jobSupervisor, dualDCSupport, platform),
 			"drain":      NewDrain(notifier, specService, jobScriptProvider, jobSupervisor, logger),
-			"get_state":  NewGetState(settingsService, specService, jobSupervisor, vitalsService, ntpService),
+			"get_state":  NewGetState(settingsService, specService, jobSupervisor, vitalsService, ntpService, platform),
 			"run_errand": NewRunErrand(specService, dirProvider.JobsDir(), platform.GetRunner(), logger),
 			"run_script": NewRunScript(jobScriptProvider, specService, logger),
 
