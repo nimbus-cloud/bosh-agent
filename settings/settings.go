@@ -128,9 +128,15 @@ type Network struct {
 	DNS     []string `json:"dns"`
 
 	Mac string `json:"mac"`
+
+	Preconfigured bool `json:"preconfigured"`
 }
 
 type Networks map[string]Network
+
+func (n Network) IsDefaultFor(category string) bool {
+	return stringArrayContains(n.Default, category)
+}
 
 func (n Networks) NetworkForMac(mac string) (Network, bool) {
 	for i := range n {
@@ -150,7 +156,7 @@ func (n Networks) DefaultNetworkFor(category string) (Network, bool) {
 	}
 
 	for _, net := range n {
-		if stringArrayContains(net.Default, category) {
+		if net.IsDefaultFor(category) {
 			return net, true
 		}
 	}
@@ -192,8 +198,26 @@ func (n Networks) IPs() (ips []string) {
 	return
 }
 
+func (n Networks) IsPreconfigured() bool {
+	for _, network := range n {
+		if network.IsVIP() {
+			// Skip VIP networks since we do not configure interfaces for them
+			continue
+		}
+
+		if !network.Preconfigured {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (n Network) String() string {
-	return fmt.Sprintf("type: '%s', ip: '%s', netmask: '%s', gateway: '%s', mac: '%s', resolved: '%t'", n.Type, n.IP, n.Netmask, n.Gateway, n.Mac, n.Resolved)
+	return fmt.Sprintf(
+		"type: '%s', ip: '%s', netmask: '%s', gateway: '%s', mac: '%s', resolved: '%t', preconfigured: '%t', use_dhcp: '%t'",
+		n.Type, n.IP, n.Netmask, n.Gateway, n.Mac, n.Resolved, n.Preconfigured, n.UseDHCP,
+	)
 }
 
 func (n Network) IsDHCP() bool {

@@ -13,6 +13,7 @@ import (
 	. "github.com/cloudfoundry/bosh-agent/agent"
 	fakeinf "github.com/cloudfoundry/bosh-agent/infrastructure/fakes"
 	fakeplatform "github.com/cloudfoundry/bosh-agent/platform/fakes"
+	fakeip "github.com/cloudfoundry/bosh-agent/platform/net/ip/fakes"
 	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
 	boshdir "github.com/cloudfoundry/bosh-agent/settings/directories"
 	fakesettings "github.com/cloudfoundry/bosh-agent/settings/fakes"
@@ -329,6 +330,8 @@ func init() {
 				defaultNetworkResolver boshsettings.DefaultNetworkResolver
 				logger                 boshlog.Logger
 				dirProvider            boshdirs.Provider
+
+				interfaceAddrsProvider *fakeip.FakeInterfaceAddressesProvider
 			)
 
 			writeNetworkDevice := func(iface string, macAddress string, isPhysical bool) string {
@@ -403,7 +406,11 @@ func init() {
 				arping := bosharp.NewArping(runner, fs, logger, boshplatform.ArpIterations, boshplatform.ArpIterationDelay, boshplatform.ArpInterfaceCheckDelay)
 				interfaceConfigurationCreator := boshnet.NewInterfaceConfigurationCreator(logger)
 
-				ubuntuNetManager := boshnet.NewUbuntuNetManager(fs, runner, ipResolver, interfaceConfigurationCreator, arping, logger)
+				interfaceAddrsProvider = &fakeip.FakeInterfaceAddressesProvider{}
+				interfaceAddressesValidator := boship.NewInterfaceAddressesValidator(interfaceAddrsProvider)
+				dnsValidator := boshnet.NewDNSValidator(fs)
+				fs.WriteFileString("/etc/resolv.conf", "8.8.8.8 4.4.4.4")
+				ubuntuNetManager := boshnet.NewUbuntuNetManager(fs, runner, ipResolver, interfaceConfigurationCreator, interfaceAddressesValidator, dnsValidator, arping, logger)
 
 				ubuntuCertManager := boshcert.NewUbuntuCertManager(fs, runner, logger)
 
@@ -499,6 +506,9 @@ func init() {
 				Context("and a single physical network interface exists", func() {
 					BeforeEach(func() {
 						stubInterfaces([][]string{[]string{"eth0", "aa:bb:cc", "physical"}})
+						interfaceAddrsProvider.GetInterfaceAddresses = []boship.InterfaceAddress{
+							boship.NewSimpleInterfaceAddress("eth0", "2.2.2.2"),
+						}
 					})
 
 					It("succeeds", func() {
@@ -510,6 +520,9 @@ func init() {
 				Context("and extra physical network interfaces exist", func() {
 					BeforeEach(func() {
 						stubInterfaces([][]string{[]string{"eth0", "aa:bb:cc", "physical"}, []string{"eth1", "aa:bb:dd", "physical"}})
+						interfaceAddrsProvider.GetInterfaceAddresses = []boship.InterfaceAddress{
+							boship.NewSimpleInterfaceAddress("eth0", "2.2.2.2"),
+						}
 					})
 
 					It("succeeds", func() {
@@ -521,6 +534,9 @@ func init() {
 				Context("and extra virtual network interfaces exist", func() {
 					BeforeEach(func() {
 						stubInterfaces([][]string{[]string{"eth0", "aa:bb:cc", "physical"}, []string{"lo", "aa:bb:ee", "virtual"}})
+						interfaceAddrsProvider.GetInterfaceAddresses = []boship.InterfaceAddress{
+							boship.NewSimpleInterfaceAddress("eth0", "2.2.2.2"),
+						}
 					})
 
 					It("succeeds", func() {
@@ -565,6 +581,9 @@ func init() {
 				Context("and a single physical network interface exists", func() {
 					BeforeEach(func() {
 						stubInterfaces([][]string{[]string{"eth0", "aa:bb:cc", "physical"}})
+						interfaceAddrsProvider.GetInterfaceAddresses = []boship.InterfaceAddress{
+							boship.NewSimpleInterfaceAddress("eth0", "2.2.2.2"),
+						}
 					})
 
 					It("succeeds", func() {
@@ -576,6 +595,9 @@ func init() {
 				Context("and extra physical network interfaces exist", func() {
 					BeforeEach(func() {
 						stubInterfaces([][]string{[]string{"eth0", "aa:bb:cc", "physical"}, []string{"eth1", "aa:bb:dd", "physical"}})
+						interfaceAddrsProvider.GetInterfaceAddresses = []boship.InterfaceAddress{
+							boship.NewSimpleInterfaceAddress("eth0", "2.2.2.2"),
+						}
 					})
 
 					It("succeeds", func() {
@@ -587,6 +609,9 @@ func init() {
 				Context("and an extra virtual network interface exists", func() {
 					BeforeEach(func() {
 						stubInterfaces([][]string{[]string{"eth0", "aa:bb:cc", "physical"}, []string{"lo", "aa:bb:dd", "virtual"}})
+						interfaceAddrsProvider.GetInterfaceAddresses = []boship.InterfaceAddress{
+							boship.NewSimpleInterfaceAddress("eth0", "2.2.2.2"),
+						}
 					})
 
 					It("succeeds", func() {
@@ -641,6 +666,10 @@ func init() {
 				Context("and two physical network interfaces with matching MAC addresses exist", func() {
 					BeforeEach(func() {
 						stubInterfaces([][]string{[]string{"eth0", "aa:bb:cc", "physical"}, []string{"eth1", "aa:bb:dd", "physical"}})
+						interfaceAddrsProvider.GetInterfaceAddresses = []boship.InterfaceAddress{
+							boship.NewSimpleInterfaceAddress("eth0", "2.2.2.2"),
+							boship.NewSimpleInterfaceAddress("eth1", "3.3.3.3"),
+						}
 					})
 
 					It("succeeds", func() {
