@@ -760,7 +760,7 @@ func (p linux) MountPersistentDisk(diskSetting boshsettings.DiskSettings, mountP
 		realPath = partitionPath
 	}
 
-	realPath, _ = p.checkForLvm(realPath)
+	realPath = p.checkForLvm(realPath)
 	err = p.diskManager.GetMounter().Mount(realPath, mountPoint)
 	if err != nil {
 		return bosherr.WrapError(err, "Mounting partition")
@@ -784,19 +784,26 @@ func (p linux) UnmountPersistentDisk(diskSettings boshsettings.DiskSettings) (bo
 		realPath += "1"
 	}
 
-	_, realPath = p.checkForLvm(realPath)
+	// looks like this is not needed here
+	//_, realPath = p.checkForLvm(realPath)
 
 	return p.diskManager.GetMounter().Unmount(realPath)
 }
 
-// lvm volumes (DRBD) need special treatment, device path need to change
-func (p linux) checkForLvm(realPath string) (devicePath, mountPath string) {
+// lvm volumes (DRBD) need special treatment -> device path need to change
+// when the device at realPath is of type LVM2_member we are dealing with drbd partition mount on startup
+// this method affects MountPersistentDisk and IsPersistentDiskMounted
+func (p linux) checkForLvm(realPath string) string {
 	stdout, _, _, err := p.cmdRunner.RunCommand("blkid", "-p", realPath)
 	if err != nil {
 		p.logger.Error(logTag, "Error checking for lvm on device: %s, err: %s", realPath, err)
-		return realPath, p.dirProvider.StoreDir()
+		return realPath
 	}
 
+	// this code is executed when drbd disk is mounted but the spec is not there yet
+	// this may happen when deploying with --recreate option or deploying onto a newer stemcell
+	// bosh agent on starup tries to mount persistent disk (/dev/sdc1) but surprise - it is not ext4 partition
+	// We need to change mount device to /dev/mapper/vgStoreData-StoreData in this case
 	if strings.Contains(stdout, ` TYPE="LVM2_member"`) {
 		lvmDevice := "/dev/mapper/vgStoreData-StoreData"
 		stdout, stderr, _, err := p.cmdRunner.RunCommand("blkid", "-p", lvmDevice)
@@ -820,10 +827,10 @@ func (p linux) checkForLvm(realPath string) (devicePath, mountPath string) {
 			p.logger.Info(logTag, "lvscan, output: %s, stderr: %s", stdout, stderr)
 		}
 
-		return lvmDevice, p.dirProvider.StoreDir()
+		return lvmDevice
 	}
 
-	return realPath, p.dirProvider.StoreDir()
+	return realPath
 }
 
 func (p linux) GetEphemeralDiskPath(diskSettings boshsettings.DiskSettings) string {
@@ -889,7 +896,7 @@ func (p linux) IsPersistentDiskMounted(diskSettings boshsettings.DiskSettings) (
 		realPath += "1"
 	}
 
-	_, realPath = p.checkForLvm(realPath)
+	realPath = p.checkForLvm(realPath)
 
 	return p.diskManager.GetMounter().IsMounted(realPath)
 }
