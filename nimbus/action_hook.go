@@ -57,21 +57,6 @@ func (a ActionHook) OnApplyAction() error {
 	disk, found := a.dualDCSupport.persistentDiskSettings()
 	if found && spec.DrbdEnabled {
 
-		// looks like this is not needed
-
-		//			if !a.dualDCSupport.isDRBDConfigWritten() {
-		//
-		//				// need to set up DRBD here - when a passive job is deployed for the first time (spec applied) this
-		//				// is the only place when drbd can be set - OnStartAction is not called by the director for passive jobs
-		//				if err := a.dualDCSupport.setupDRBD(); err != nil {
-		//					return bosherr.WrapError(err, "setting up DRBD")
-		//				}
-		//			}
-		//			_, err = a.dualDCSupport.unmountDRBD()
-		//			if err != nil {
-		//				return bosherr.WrapError(err, "DRBD unmounting persistent share")
-		//			}
-
 		// when cut-over is done - disks need to be remounted to make sure drbd is setup correctly
 		if _, err := a.platform.UnmountPersistentDisk(disk); err != nil {
 			return bosherr.WrapErrorf(err, "Unmounting persistent disk %s", disk)
