@@ -64,11 +64,6 @@ func (d DualDCSupport) setupDRBD() (err error) {
 		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling createLvm()")
 	}
 
-	// looks like there is no need for this
-	//	if err = d.drdbRestart(); err != nil {
-	//		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling drdbRestart()")
-	//	}
-
 	if err = d.drbdCreatePartition(); err != nil {
 		return bosherr.WrapError(err, "DualDCSupport.setupDRBD() error calling drbdCreatePartition()")
 	}
@@ -76,7 +71,6 @@ func (d DualDCSupport) setupDRBD() (err error) {
 	return
 }
 
-// TODO: should this check if it is drbd mounted vs regular mount???
 func (d DualDCSupport) mountDRBD() (err error) {
 	d.logger.Info(nimbusLogTag, "Drbd mount - begin")
 
@@ -206,11 +200,6 @@ func (d DualDCSupport) createLvm() (err error) {
 	return
 }
 
-//func (d DualDCSupport) drdbRestart() (err error) {
-//	_, _, _, err = d.cmdRunner.RunCommand("/etc/init.d/drbd", "restart")
-//	return
-//}
-
 func (d DualDCSupport) drbdCreatePartition() (err error) {
 
 	// TODO: looks like none of this is needed
@@ -227,7 +216,7 @@ func (d DualDCSupport) drbdCreatePartition() (err error) {
 	//		return bosherr.WrapErrorf(err, "Failure: drbdadm dump-md r0. Output: %s", out)
 	//	}
 	if strings.Contains(out, "No valid meta data found") {
-		_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "echo 'no' | drbdadm create-md r0")
+		_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "echo 'yes' | drbdadm create-md r0")
 		if err != nil {
 			return
 		}
