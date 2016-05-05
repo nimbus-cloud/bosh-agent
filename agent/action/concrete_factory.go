@@ -56,7 +56,7 @@ func NewFactory(
 
 			// Job management
 			"prepare":    NewPrepare(applier),
-			"apply":      NewApply(applier, specService, settingsService, dualDCSupport, platform),
+			"apply":      NewApply(applier, specService, settingsService, dirProvider.InstanceDir(), platform.GetFs(), dualDCSupport, platform),
 			"start":      NewStart(jobSupervisor, applier, specService, dualDCSupport, platform),
 			"stop":       NewStop(jobSupervisor, dualDCSupport, platform),
 			"drain":      NewDrain(notifier, specService, jobScriptProvider, jobSupervisor, logger),
@@ -71,8 +71,11 @@ func NewFactory(
 			// Disk management
 			"list_disk":    NewListDisk(settingsService, platform, logger),
 			"migrate_disk": NewMigrateDisk(platform, dirProvider),
-			"mount_disk":   NewMountDisk(settingsService, platform, platform, dirProvider),
+			"mount_disk":   NewMountDisk(settingsService, platform, dirProvider, logger),
 			"unmount_disk": NewUnmountDisk(settingsService, platform),
+
+			// ARP cache management
+			"delete_arp_entries": NewDeleteARPEntries(platform),
 
 			// Networkingconcrete_factory_test.go
 			"prepare_network_change":     NewPrepareNetworkChange(platform.GetFs(), settingsService, NewAgentKiller()),

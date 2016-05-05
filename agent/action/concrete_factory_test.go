@@ -17,6 +17,7 @@ import (
 	fakenotif "github.com/cloudfoundry/bosh-agent/notification/fakes"
 	fakeplatform "github.com/cloudfoundry/bosh-agent/platform/fakes"
 	boshntp "github.com/cloudfoundry/bosh-agent/platform/ntp"
+	boshdir "github.com/cloudfoundry/bosh-agent/settings/directories"
 	fakesettings "github.com/cloudfoundry/bosh-agent/settings/fakes"
 	fakeblobstore "github.com/cloudfoundry/bosh-utils/blobstore/fakes"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
@@ -87,13 +88,14 @@ var _ = Describe("concreteFactory", func() {
 	It("apply", func() {
 		action, err := factory.Create("apply")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(action).To(Equal(NewApply(applier, specService, settingsService, dualDCSupport, platform)))
+		Expect(action).To(Equal(NewApply(applier, specService, settingsService, boshdir.NewProvider("/var/vcap").InstanceDir(), platform.GetFs(), dualDCSupport, platform)))
 	})
 
 	It("drain", func() {
 		action, err := factory.Create("drain")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(action).To(Equal(NewDrain(notifier, specService, jobScriptProvider, jobSupervisor, logger)))
+		// Cannot do equality check since channel is used in initializer
+		Expect(action).To(BeAssignableToTypeOf(DrainAction{}))
 	})
 
 	It("fetch_logs", func() {
@@ -136,7 +138,7 @@ var _ = Describe("concreteFactory", func() {
 	It("mount_disk", func() {
 		action, err := factory.Create("mount_disk")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(action).To(Equal(NewMountDisk(settingsService, platform, platform, platform.GetDirProvider())))
+		Expect(action).To(Equal(NewMountDisk(settingsService, platform, platform.GetDirProvider(), logger)))
 	})
 
 	It("ping", func() {
@@ -211,5 +213,11 @@ var _ = Describe("concreteFactory", func() {
 		action, err := factory.Create("prepare")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(action).To(Equal(NewPrepare(applier)))
+	})
+
+	It("delete_arp_entries", func() {
+		action, err := factory.Create("delete_arp_entries")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(action).To(Equal(NewDeleteARPEntries(platform)))
 	})
 })

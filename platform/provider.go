@@ -43,7 +43,7 @@ type Options struct {
 	Linux LinuxOptions
 }
 
-func NewProvider(logger boshlog.Logger, dirProvider boshdirs.Provider, statsCollector boshstats.Collector, fs boshsys.FileSystem, options Options) Provider {
+func NewProvider(logger boshlog.Logger, dirProvider boshdirs.Provider, statsCollector boshstats.Collector, fs boshsys.FileSystem, options Options, bootstrapState *BootstrapState) Provider {
 	runner := boshsys.NewExecCmdRunner(logger)
 
 	linuxDiskManager := boshdisk.NewLinuxDiskManager(logger, runner, fs, options.Linux.BindMountPersistentDisk)
@@ -72,8 +72,8 @@ func NewProvider(logger boshlog.Logger, dirProvider boshdirs.Provider, statsColl
 	centosNetManager := boshnet.NewCentosNetManager(fs, runner, ipResolver, interfaceConfigurationCreator, interfaceAddressesValidator, dnsValidator, arping, logger)
 	ubuntuNetManager := boshnet.NewUbuntuNetManager(fs, runner, ipResolver, interfaceConfigurationCreator, interfaceAddressesValidator, dnsValidator, arping, logger)
 
-	centosCertManager := boshcert.NewCentOSCertManager(fs, runner, logger)
-	ubuntuCertManager := boshcert.NewUbuntuCertManager(fs, runner, logger)
+	centosCertManager := boshcert.NewCentOSCertManager(fs, runner, 0, logger)
+	ubuntuCertManager := boshcert.NewUbuntuCertManager(fs, runner, 60, logger)
 
 	routesSearcher := boshnet.NewCmdRoutesSearcher(runner)
 	linuxDefaultNetworkResolver := boshnet.NewDefaultNetworkResolver(routesSearcher, ipResolver)
@@ -85,11 +85,13 @@ func NewProvider(logger boshlog.Logger, dirProvider boshdirs.Provider, statsColl
 	switch options.Linux.DevicePathResolutionType {
 	case "virtio":
 		udev := boshudev.NewConcreteUdevDevice(runner, logger)
-		idDevicePathResolver := devicepathresolver.NewIDDevicePathResolver(500*time.Millisecond, udev, fs)
+		idDevicePathResolver := devicepathresolver.NewIDDevicePathResolver(500*time.Millisecond, options.Linux.VirtioDevicePrefix, udev, fs)
 		mappedDevicePathResolver := devicepathresolver.NewMappedDevicePathResolver(500*time.Millisecond, fs)
 		devicePathResolver = devicepathresolver.NewVirtioDevicePathResolver(idDevicePathResolver, mappedDevicePathResolver, logger)
 	case "scsi":
-		devicePathResolver = devicepathresolver.NewScsiDevicePathResolver(500*time.Millisecond, fs)
+		scsiIDPathResolver := devicepathresolver.NewSCSIIDDevicePathResolver(50000*time.Millisecond, fs, logger)
+		scsiVolumeIDPathResolver := devicepathresolver.NewSCSIVolumeIDDevicePathResolver(500*time.Millisecond, fs)
+		devicePathResolver = devicepathresolver.NewScsiDevicePathResolver(scsiVolumeIDPathResolver, scsiIDPathResolver)
 	default:
 		devicePathResolver = devicepathresolver.NewIdentityDevicePathResolver()
 	}
@@ -109,6 +111,7 @@ func NewProvider(logger boshlog.Logger, dirProvider boshdirs.Provider, statsColl
 		monitRetryStrategy,
 		devicePathResolver,
 		500*time.Millisecond,
+		bootstrapState,
 		options.Linux,
 		logger,
 		linuxDefaultNetworkResolver,
@@ -129,6 +132,7 @@ func NewProvider(logger boshlog.Logger, dirProvider boshdirs.Provider, statsColl
 		monitRetryStrategy,
 		devicePathResolver,
 		500*time.Millisecond,
+		bootstrapState,
 		options.Linux,
 		logger,
 		linuxDefaultNetworkResolver,

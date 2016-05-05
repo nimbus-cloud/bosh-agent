@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"path/filepath"
 	"time"
 
@@ -54,7 +55,6 @@ func init() {
 			BeforeEach(func() {
 				platform = fakeplatform.NewFakePlatform()
 				dirProvider = boshdir.NewProvider("/var/vcap")
-
 				settingsSource = &fakeinf.FakeSettingsSource{}
 				settingsService = &fakesettings.FakeSettingsService{}
 			})
@@ -220,49 +220,6 @@ func init() {
 				Expect(err.Error()).To(ContainSubstring("fake-setup-tmp-dir-err"))
 			})
 
-			It("mounts persistent disk", func() {
-				settingsService.Settings.Disks = boshsettings.Disks{
-					Persistent: map[string]interface{}{
-						"vol-123": map[string]interface{}{
-							"volume_id": "2",
-							"path":      "/dev/sdb",
-						},
-					},
-				}
-
-				err := bootstrap()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(platform.MountPersistentDiskSettings).To(Equal(boshsettings.DiskSettings{
-					ID:       "vol-123",
-					VolumeID: "2",
-					Path:     "/dev/sdb",
-				}))
-				Expect(platform.MountPersistentDiskMountPoint).To(Equal(dirProvider.StoreDir()))
-			})
-
-			It("errors if there is more than one persistent disk", func() {
-				settingsService.Settings.Disks = boshsettings.Disks{
-					Persistent: map[string]interface{}{
-						"vol-123": "/dev/sdb",
-						"vol-456": "/dev/sdc",
-					},
-				}
-
-				err := bootstrap()
-				Expect(err).To(HaveOccurred())
-			})
-
-			It("does not try to mount when no persistent disk", func() {
-				settingsService.Settings.Disks = boshsettings.Disks{
-					Persistent: map[string]interface{}{},
-				}
-
-				err := bootstrap()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(platform.MountPersistentDiskSettings).To(Equal(boshsettings.DiskSettings{}))
-				Expect(platform.MountPersistentDiskMountPoint).To(Equal(""))
-			})
-
 			It("grows the root filesystem", func() {
 				err := bootstrap()
 				Expect(err).NotTo(HaveOccurred())
@@ -280,6 +237,7 @@ func init() {
 
 			It("sets root and vcap passwords", func() {
 				settingsService.Settings.Env.Bosh.Password = "some-encrypted-password"
+				settingsService.Settings.Env.Bosh.KeepRootPassword = false
 
 				err := bootstrap()
 				Expect(err).NotTo(HaveOccurred())
@@ -288,7 +246,20 @@ func init() {
 				Expect("some-encrypted-password").To(Equal(platform.UserPasswords["vcap"]))
 			})
 
+			It("does not change root password if keep_root_password is set to true", func() {
+				settingsService.Settings.Env.Bosh.Password = "some-encrypted-password"
+				settingsService.Settings.Env.Bosh.KeepRootPassword = true
+
+				err := bootstrap()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(1).To(Equal(len(platform.UserPasswords)))
+				Expect("some-encrypted-password").ToNot(Equal(platform.UserPasswords["root"]))
+				Expect("some-encrypted-password").To(Equal(platform.UserPasswords["vcap"]))
+			})
+
 			It("does not set password if not provided", func() {
+				settingsService.Settings.Env.Bosh.KeepRootPassword = false
+
 				err := bootstrap()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(0).To(Equal(len(platform.UserPasswords)))
@@ -317,6 +288,116 @@ func init() {
 				err := bootstrap()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(platform.StartMonitStarted).To(BeTrue())
+			})
+
+			Describe("RemoveDevTools", func() {
+
+				It("removes development tools if settings.env.bosh.remove_dev_tools is true", func() {
+					settingsService.Settings.Env.Bosh.RemoveDevTools = true
+					platform.GetFs().WriteFileString(path.Join(dirProvider.EtcDir(), "dev_tools_file_list"), "/usr/bin/gfortran")
+
+					err := bootstrap()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(platform.IsRemoveDevToolsCalled).To(BeTrue())
+					Expect(platform.PackageFileListPath).To(Equal(path.Join(dirProvider.EtcDir(), "dev_tools_file_list")))
+				})
+
+				It("does NOTHING if settings.env.bosh.remove_dev_tools is NOT set", func() {
+					err := bootstrap()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(platform.IsRemoveDevToolsCalled).To(BeFalse())
+				})
+
+				It("does NOTHING if if settings.env.bosh.remove_dev_tools is true AND dev_tools_file_list does NOT exist", func() {
+					settingsService.Settings.Env.Bosh.RemoveDevTools = true
+					err := bootstrap()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(platform.IsRemoveDevToolsCalled).To(BeFalse())
+				})
+			})
+
+			Describe("Mount persistent disk", func() {
+				Context("when there is more than one persistent disk", func() {
+					It("returns error", func() {
+						settingsService.Settings.Disks = boshsettings.Disks{
+							Persistent: map[string]interface{}{
+								"vol-123": "/dev/sdb",
+								"vol-456": "/dev/sdc",
+							},
+						}
+
+						err := bootstrap()
+						Expect(err).To(HaveOccurred())
+					})
+				})
+
+				Context("when there is no persistent disk", func() {
+					It("does not try to mount ", func() {
+						settingsService.Settings.Disks = boshsettings.Disks{
+							Persistent: map[string]interface{}{},
+						}
+
+						err := bootstrap()
+						Expect(err).NotTo(HaveOccurred())
+						Expect(platform.MountPersistentDiskSettings).To(Equal(boshsettings.DiskSettings{}))
+						Expect(platform.MountPersistentDiskMountPoint).To(Equal(""))
+					})
+				})
+
+				Context("when there is no drive specified by settings", func() {
+					It("returns error", func() {
+						settingsService.Settings.Disks = boshsettings.Disks{
+							Persistent: map[string]interface{}{
+								"vol-123": "/dev/not-exists",
+							},
+						}
+						platform.SetIsPersistentDiskMountable(false, errors.New("Drive not exist!"))
+
+						err := bootstrap()
+						Expect(err).To(HaveOccurred())
+						Expect(platform.MountPersistentDiskSettings).To(Equal(boshsettings.DiskSettings{}))
+						Expect(platform.MountPersistentDiskMountPoint).To(Equal(""))
+					})
+				})
+
+				Context("when there is no partition on drive specified by settings", func() {
+					It("does not try to mount ", func() {
+						settingsService.Settings.Disks = boshsettings.Disks{
+							Persistent: map[string]interface{}{
+								"vol-123": "/dev/valid",
+							},
+						}
+						platform.SetIsPersistentDiskMountable(false, nil)
+
+						err := bootstrap()
+						Expect(err).NotTo(HaveOccurred())
+						Expect(platform.MountPersistentDiskSettings).To(Equal(boshsettings.DiskSettings{}))
+						Expect(platform.MountPersistentDiskMountPoint).To(Equal(""))
+					})
+				})
+
+				Context("when specified disk has partition", func() {
+					It("mounts persistent disk", func() {
+						settingsService.Settings.Disks = boshsettings.Disks{
+							Persistent: map[string]interface{}{
+								"vol-123": map[string]interface{}{
+									"volume_id": "2",
+									"path":      "/dev/sdb",
+								},
+							},
+						}
+						platform.SetIsPersistentDiskMountable(true, nil)
+
+						err := bootstrap()
+						Expect(err).NotTo(HaveOccurred())
+						Expect(platform.MountPersistentDiskSettings).To(Equal(boshsettings.DiskSettings{
+							ID:       "vol-123",
+							VolumeID: "2",
+							Path:     "/dev/sdb",
+						}))
+						Expect(platform.MountPersistentDiskMountPoint).To(Equal(dirProvider.StoreDir()))
+					})
+				})
 			})
 		})
 
@@ -412,7 +493,7 @@ func init() {
 				fs.WriteFileString("/etc/resolv.conf", "8.8.8.8 4.4.4.4")
 				ubuntuNetManager := boshnet.NewUbuntuNetManager(fs, runner, ipResolver, interfaceConfigurationCreator, interfaceAddressesValidator, dnsValidator, arping, logger)
 
-				ubuntuCertManager := boshcert.NewUbuntuCertManager(fs, runner, logger)
+				ubuntuCertManager := boshcert.NewUbuntuCertManager(fs, runner, 1, logger)
 
 				monitRetryable := boshplatform.NewMonitRetryable(runner)
 				monitRetryStrategy := boshretry.NewAttemptRetryStrategy(10, 1*time.Second, monitRetryable, logger)
@@ -421,6 +502,8 @@ func init() {
 
 				routesSearcher := boshnet.NewCmdRoutesSearcher(runner)
 				defaultNetworkResolver = boshnet.NewDefaultNetworkResolver(routesSearcher, ipResolver)
+				state, err := boshplatform.NewBootstrapState(fs, "/tmp/agent_state.json")
+				Expect(err).NotTo(HaveOccurred())
 
 				platform = boshplatform.NewLinuxPlatform(
 					fs,
@@ -437,6 +520,7 @@ func init() {
 					monitRetryStrategy,
 					devicePathResolver,
 					500*time.Millisecond,
+					state,
 					linuxOptions,
 					logger,
 					defaultNetworkResolver,
