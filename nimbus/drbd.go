@@ -216,7 +216,7 @@ func (d DualDCSupport) drbdCreatePartition() (err error) {
 	//		return bosherr.WrapErrorf(err, "Failure: drbdadm dump-md r0. Output: %s", out)
 	//	}
 	if strings.Contains(out, "No valid meta data found") {
-		_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "echo 'no' | drbdadm create-md r0")
+		_, _, _, err = d.cmdRunner.RunCommand("sh", "-c", "echo 'yes' | drbdadm create-md r0")
 		if err != nil {
 			return
 		}
