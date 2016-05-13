@@ -24,6 +24,11 @@ func (f linuxFormatter) Format(partitionPath string, fsType FileSystemType) (err
 		return bosherr.WrapError(err, "Checking filesystem format of partition")
 	}
 
+	// do not format existing drbd partitions !
+	if existingFsType == FileSystemDrbdPartition {
+		return
+	}
+
 	if fsType == FileSystemSwap {
 		if existingFsType == FileSystemSwap {
 			return
@@ -79,7 +84,4 @@ func (f linuxFormatter) getPartitionFormatType(partitionPath string) (FileSystem
 	}
 
 	return FileSystemType(match[1]), nil
-	// TODO: before 2323.2 merge this method returned bool, now things can break
-	// for drbd shares with what the code above does.
-	// return strings.Contains(stdout, fmt.Sprintf(` TYPE="%s"`, fsType)) || strings.Contains(stdout, ` TYPE="LVM2_member"`)
 }
