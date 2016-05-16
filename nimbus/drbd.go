@@ -39,7 +39,7 @@ func NewDualDCSupport(
 ) *DualDCSupport {
 
 	linuxMounter := boshdisk.NewLinuxMounter(cmdRunner, boshdisk.NewCmdMountsSearcher(cmdRunner), 1*time.Second)
-	linuxFormatter := boshdisk.NewLinuxFormatter(cmdRunner, fs)
+	linuxFormatter := boshdisk.NewLinuxFormatter(cmdRunner, fs, logger)
 
 	return &DualDCSupport{
 		cmdRunner:       cmdRunner,

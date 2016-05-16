@@ -52,7 +52,7 @@ func NewLinuxDiskManager(
 		partitioner:           NewSfdiskPartitioner(logger, runner, clock.NewClock()),
 		rootDevicePartitioner: NewRootDevicePartitioner(logger, runner, uint64(20*1024*1024)),
 		partedPartitioner:     NewPartedPartitioner(logger, runner, clock.NewClock()),
-		formatter:             NewLinuxFormatter(runner, fs),
+		formatter:             NewLinuxFormatter(runner, fs, logger),
 		mounter:               mounter,
 		mountsSearcher:        mountsSearcher,
 		fs:                    fs,

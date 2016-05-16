@@ -2,31 +2,39 @@ package disk
 
 import (
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
+	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
 	"regexp"
+	"strings"
 )
 
 type linuxFormatter struct {
 	runner boshsys.CmdRunner
 	fs     boshsys.FileSystem
+	logger boshlog.Logger
 }
 
-func NewLinuxFormatter(runner boshsys.CmdRunner, fs boshsys.FileSystem) Formatter {
+func NewLinuxFormatter(runner boshsys.CmdRunner, fs boshsys.FileSystem, logger boshlog.Logger) Formatter {
 	return linuxFormatter{
 		runner: runner,
 		fs:     fs,
+		logger: logger,
 	}
 }
 
 func (f linuxFormatter) Format(partitionPath string, fsType FileSystemType) (err error) {
+
+	// do not format existing drbd partitions
+	if f.isDrbdPartition(partitionPath) {
+		f.logger.Info("LinuxFormatter", "LVM2_member partition discovered, exiting")
+		return
+	}
+
+	f.logger.Info("LinuxFormatter", "Non LVM2_member partition discovered, continuing")
+
 	existingFsType, err := f.getPartitionFormatType(partitionPath)
 	if err != nil {
 		return bosherr.WrapError(err, "Checking filesystem format of partition")
-	}
-
-	// do not format existing drbd partitions !
-	if existingFsType == FileSystemDrbdPartition {
-		return
 	}
 
 	if fsType == FileSystemSwap {
@@ -84,4 +92,9 @@ func (f linuxFormatter) getPartitionFormatType(partitionPath string) (FileSystem
 	}
 
 	return FileSystemType(match[1]), nil
+}
+
+func (f linuxFormatter) isDrbdPartition(partitionPath string) bool {
+	stdout, _, _, _ := f.runner.RunCommand("blkid", "-p", partitionPath)
+	return strings.Contains(stdout, `TYPE="LVM2_member"`)
 }
