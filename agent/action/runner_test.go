@@ -53,6 +53,10 @@ func (a *actionWithTypes) IsPersistent() bool {
 	return false
 }
 
+func (a *actionWithTypes) IsLoggable() bool {
+	return true
+}
+
 func (a *actionWithTypes) Run(arg argumentWithTypes) (valueType, error) {
 	a.Arg = arg
 	return a.Value, a.Err
@@ -82,6 +86,10 @@ func (a *actionWithGoodRunMethod) IsAsynchronous() bool {
 
 func (a *actionWithGoodRunMethod) IsPersistent() bool {
 	return false
+}
+
+func (a *actionWithGoodRunMethod) IsLoggable() bool {
+	return true
 }
 
 func (a *actionWithGoodRunMethod) Run(subAction string, someID int, extraArgs argsType, sliceArgs []string) (valueType, error) {
@@ -116,6 +124,10 @@ func (a *actionWithOptionalRunArgument) IsPersistent() bool {
 	return false
 }
 
+func (a *actionWithOptionalRunArgument) IsLoggable() bool {
+	return true
+}
+
 func (a *actionWithOptionalRunArgument) Run(subAction string, optionalArgs ...argsType) (valueType, error) {
 	a.SubAction = subAction
 	a.OptionalArgs = optionalArgs
@@ -140,6 +152,10 @@ func (a *actionWithoutRunMethod) IsPersistent() bool {
 	return false
 }
 
+func (a *actionWithoutRunMethod) IsLoggable() bool {
+	return true
+}
+
 func (a *actionWithoutRunMethod) Resume() (interface{}, error) {
 	return nil, nil
 }
@@ -156,6 +172,10 @@ func (a *actionWithOneRunReturnValue) IsAsynchronous() bool {
 
 func (a *actionWithOneRunReturnValue) IsPersistent() bool {
 	return false
+}
+
+func (a *actionWithOneRunReturnValue) IsLoggable() bool {
+	return true
 }
 
 func (a *actionWithOneRunReturnValue) Run() error {
@@ -180,6 +200,10 @@ func (a *actionWithSecondReturnValueNotError) IsPersistent() bool {
 	return false
 }
 
+func (a *actionWithSecondReturnValueNotError) IsLoggable() bool {
+	return true
+}
+
 func (a *actionWithSecondReturnValueNotError) Run() (interface{}, string) {
 	return nil, ""
 }
@@ -189,6 +213,38 @@ func (a *actionWithSecondReturnValueNotError) Resume() (interface{}, error) {
 }
 
 func (a *actionWithSecondReturnValueNotError) Cancel() error {
+	return nil
+}
+
+type actionWithProtocolVersion struct {
+	ProtocolVersion ProtocolVersion
+	SubAction       string
+}
+
+func (a *actionWithProtocolVersion) IsAsynchronous() bool {
+	return false
+}
+
+func (a *actionWithProtocolVersion) IsPersistent() bool {
+	return false
+}
+
+func (a *actionWithProtocolVersion) IsLoggable() bool {
+	return true
+}
+
+func (a *actionWithProtocolVersion) Run(protocolVersion ProtocolVersion, subAction string) (valueType, error) {
+	a.ProtocolVersion = protocolVersion
+	a.SubAction = subAction
+
+	return valueType{}, nil
+}
+
+func (a *actionWithProtocolVersion) Resume() (interface{}, error) {
+	return nil, nil
+}
+
+func (a *actionWithProtocolVersion) Cancel() error {
 	return nil
 }
 
@@ -342,6 +398,19 @@ func init() {
 
 				Expect(testAction.Resumed).To(BeTrue())
 			})
+		})
+
+		It("passes protocol version to run method", func() {
+			runner := NewRunner()
+
+			action := &actionWithProtocolVersion{}
+			payload := `{"protocol":98,"arguments":["setup"]}`
+
+			_, err := runner.Run(action, []byte(payload))
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(action.ProtocolVersion).To(Equal(ProtocolVersion(98)))
+			Expect(action.SubAction).To(Equal("setup"))
 		})
 	})
 }

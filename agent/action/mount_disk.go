@@ -10,8 +10,6 @@ import (
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 )
 
-const logTag string = "MountDiskAction"
-
 type diskMounter interface {
 	MountPersistentDisk(diskSettings boshsettings.DiskSettings, mountPoint string) error
 }
@@ -43,6 +41,10 @@ func (a MountDiskAction) IsAsynchronous() bool {
 
 func (a MountDiskAction) IsPersistent() bool {
 	return false
+}
+
+func (a MountDiskAction) IsLoggable() bool {
+	return true
 }
 
 func (a MountDiskAction) Run(diskCid string) (interface{}, error) {

@@ -1,8 +1,11 @@
 package agent
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"path"
+	"path/filepath"
 
 	boshplatform "github.com/cloudfoundry/bosh-agent/platform"
 	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
@@ -44,22 +47,28 @@ func (boot bootstrap) Run() (err error) {
 		return bosherr.WrapError(err, "Setting up runtime configuration")
 	}
 
-	publicKey, err := boot.settingsService.PublicSSHKeyForUsername(boshsettings.VCAPUsername)
-	if err != nil {
-		return bosherr.WrapError(err, "Setting up ssh: Getting public key")
-	}
-
-	if len(publicKey) > 0 {
-		if err = boot.platform.SetupSSH(publicKey, boshsettings.VCAPUsername); err != nil {
-			return bosherr.WrapError(err, "Setting up ssh")
-		}
-	}
-
 	if err = boot.settingsService.LoadSettings(); err != nil {
 		return bosherr.WrapError(err, "Fetching settings")
 	}
 
 	settings := boot.settingsService.GetSettings()
+
+	envPublicKeys := settings.Env.GetAuthorizedKeys()
+	iaasPublicKey, err := boot.settingsService.PublicSSHKeyForUsername(boshsettings.VCAPUsername)
+	if err != nil {
+		return bosherr.WrapError(err, "Setting up ssh: Getting public key")
+	}
+
+	publicKeys := envPublicKeys
+	if len(iaasPublicKey) > 0 {
+		publicKeys = append(publicKeys, iaasPublicKey)
+	}
+
+	if len(publicKeys) > 0 {
+		if err = boot.platform.SetupSSH(publicKeys, boshsettings.VCAPUsername); err != nil {
+			return bosherr.WrapError(err, "Setting up ssh")
+		}
+	}
 
 	if err = boot.setUserPasswords(settings.Env); err != nil {
 		return bosherr.WrapError(err, "Settings user password")
@@ -90,6 +99,14 @@ func (boot bootstrap) Run() (err error) {
 		return bosherr.WrapError(err, "Setting up root disk")
 	}
 
+	if err = boot.platform.SetupLogDir(); err != nil {
+		return bosherr.WrapError(err, "Setting up log dir")
+	}
+
+	if err = boot.platform.SetupLoggingAndAuditing(); err != nil {
+		return bosherr.WrapError(err, "Starting up logging and auditing utilities")
+	}
+
 	if err = boot.platform.SetupDataDir(); err != nil {
 		return bosherr.WrapError(err, "Setting up data dir")
 	}
@@ -98,11 +115,20 @@ func (boot bootstrap) Run() (err error) {
 		return bosherr.WrapError(err, "Setting up tmp dir")
 	}
 
-	if len(settings.Disks.Persistent) > 1 {
-		return errors.New("Error mounting persistent disk, there is more than one persistent disk")
+	if err = boot.platform.SetupHomeDir(); err != nil {
+		return bosherr.WrapError(err, "Setting up home dir")
+	}
+
+	if err = boot.platform.SetupBlobsDir(); err != nil {
+		return bosherr.WrapError(err, "Setting up blobs dir")
+	}
+
+	if err = boot.comparePersistentDisk(); err != nil {
+		return bosherr.WrapError(err, "Comparing persistent disks")
 	}
 
 	for diskID := range settings.Disks.Persistent {
+		var lastDiskID string
 		diskSettings, _ := settings.PersistentDiskSettings(diskID)
 
 		isPartitioned, err := boot.platform.IsPersistentDiskMountable(diskSettings)
@@ -110,7 +136,11 @@ func (boot bootstrap) Run() (err error) {
 			return bosherr.WrapError(err, "Checking if persistent disk is partitioned")
 		}
 
-		if isPartitioned {
+		lastDiskID, err = boot.lastMountedCid()
+		if err != nil {
+			return bosherr.WrapError(err, "Fetching last mounted disk CID")
+		}
+		if isPartitioned && diskID == lastDiskID {
 			if err = boot.platform.MountPersistentDisk(diskSettings, boot.dirProvider.StoreDir()); err != nil {
 				return bosherr.WrapError(err, "Mounting persistent disk")
 			}
@@ -140,6 +170,42 @@ func (boot bootstrap) Run() (err error) {
 	return nil
 }
 
+func (boot bootstrap) comparePersistentDisk() error {
+	settings := boot.settingsService.GetSettings()
+	updateSettingsPath := filepath.Join(boot.platform.GetDirProvider().BoshDir(), "update_settings.json")
+
+	if err := boot.checkLastMountedCid(settings); err != nil {
+		return err
+	}
+
+	var updateSettings boshsettings.UpdateSettings
+
+	if boot.platform.GetFs().FileExists(updateSettingsPath) {
+		contents, err := boot.platform.GetFs().ReadFile(updateSettingsPath)
+		if err != nil {
+			return bosherr.WrapError(err, "Reading update_settings.json")
+		}
+
+		if err = json.Unmarshal(contents, &updateSettings); err != nil {
+			return bosherr.WrapError(err, "Unmarshalling update_settings.json")
+		}
+	}
+
+	for _, diskAssociation := range updateSettings.DiskAssociations {
+		if _, ok := settings.PersistentDiskSettings(diskAssociation.DiskCID); !ok {
+			return fmt.Errorf("Disk %s is not attached", diskAssociation.DiskCID)
+		}
+	}
+
+	if len(settings.Disks.Persistent) > 1 {
+		if len(settings.Disks.Persistent) > len(updateSettings.DiskAssociations) {
+			return errors.New("Unexpected disk attached")
+		}
+	}
+
+	return nil
+}
+
 func (boot bootstrap) setUserPasswords(env boshsettings.Env) error {
 	password := env.GetPassword()
 	if password == "" {
@@ -159,4 +225,38 @@ func (boot bootstrap) setUserPasswords(env boshsettings.Env) error {
 	}
 
 	return nil
+}
+
+func (boot bootstrap) checkLastMountedCid(settings boshsettings.Settings) error {
+	lastMountedCid, err := boot.lastMountedCid()
+	if err != nil {
+		return bosherr.WrapError(err, "Fetching last mounted disk CID")
+	}
+
+	if len(settings.Disks.Persistent) == 0 || lastMountedCid == "" {
+		return nil
+	}
+
+	if _, ok := settings.PersistentDiskSettings(lastMountedCid); !ok {
+		return fmt.Errorf("Attached disk disagrees with previous mount")
+	}
+
+	return nil
+}
+
+func (boot bootstrap) lastMountedCid() (string, error) {
+	managedDiskSettingsPath := filepath.Join(boot.platform.GetDirProvider().BoshDir(), "managed_disk_settings.json")
+	var lastMountedCid string
+
+	if boot.platform.GetFs().FileExists(managedDiskSettingsPath) {
+		contents, err := boot.platform.GetFs().ReadFile(managedDiskSettingsPath)
+		if err != nil {
+			return "", bosherr.WrapError(err, "Reading managed_disk_settings.json")
+		}
+		lastMountedCid = string(contents)
+
+		return lastMountedCid, nil
+	}
+
+	return "", nil
 }

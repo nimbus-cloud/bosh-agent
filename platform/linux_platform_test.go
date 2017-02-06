@@ -1,29 +1,35 @@
+// +build !windows
+
 package platform_test
 
 import (
 	"errors"
 	"os"
 	"path"
-	"time"
+	"path/filepath"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	fakedpresolv "github.com/cloudfoundry/bosh-agent/infrastructure/devicepathresolver/fakes"
 	. "github.com/cloudfoundry/bosh-agent/platform"
+
+	fakedpresolv "github.com/cloudfoundry/bosh-agent/infrastructure/devicepathresolver/fakes"
 	fakecert "github.com/cloudfoundry/bosh-agent/platform/cert/fakes"
 	fakedevutil "github.com/cloudfoundry/bosh-agent/platform/deviceutil/fakes"
-	boshdisk "github.com/cloudfoundry/bosh-agent/platform/disk"
 	fakedisk "github.com/cloudfoundry/bosh-agent/platform/disk/fakes"
 	fakenet "github.com/cloudfoundry/bosh-agent/platform/net/fakes"
 	fakestats "github.com/cloudfoundry/bosh-agent/platform/stats/fakes"
+	fakeretry "github.com/cloudfoundry/bosh-utils/retrystrategy/fakes"
+	fakesys "github.com/cloudfoundry/bosh-utils/system/fakes"
+	fakeuuidgen "github.com/cloudfoundry/bosh-utils/uuid/fakes"
+
+	boshdisk "github.com/cloudfoundry/bosh-agent/platform/disk"
 	boshvitals "github.com/cloudfoundry/bosh-agent/platform/vitals"
 	boshsettings "github.com/cloudfoundry/bosh-agent/settings"
 	boshdirs "github.com/cloudfoundry/bosh-agent/settings/directories"
 	boshcmd "github.com/cloudfoundry/bosh-utils/fileutil"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
-	fakeretry "github.com/cloudfoundry/bosh-utils/retrystrategy/fakes"
-	fakesys "github.com/cloudfoundry/bosh-utils/system/fakes"
 )
 
 var _ = Describe("LinuxPlatform", describeLinuxPlatform)
@@ -46,6 +52,8 @@ func describeLinuxPlatform() {
 		monitRetryStrategy         *fakeretry.FakeRetryStrategy
 		fakeDefaultNetworkResolver *fakenet.FakeDefaultNetworkResolver
 
+		fakeUUIDGenerator *fakeuuidgen.FakeGenerator
+
 		state    *BootstrapState
 		stateErr error
 		options  LinuxOptions
@@ -63,13 +71,15 @@ func describeLinuxPlatform() {
 		dirProvider = boshdirs.NewProvider("/fake-dir")
 		cdutil = fakedevutil.NewFakeDeviceUtil()
 		compressor = boshcmd.NewTarballCompressor(cmdRunner, fs)
-		copier = boshcmd.NewCpCopier(cmdRunner, fs, logger)
+		copier = boshcmd.NewGenericCpCopier(fs, logger)
 		vitalsService = boshvitals.NewService(collector, dirProvider)
 		netManager = &fakenet.FakeManager{}
 		certManager = new(fakecert.FakeManager)
 		monitRetryStrategy = fakeretry.NewFakeRetryStrategy()
 		devicePathResolver = fakedpresolv.NewFakeDevicePathResolver()
 		fakeDefaultNetworkResolver = &fakenet.FakeDefaultNetworkResolver{}
+
+		fakeUUIDGenerator = fakeuuidgen.NewFakeGenerator()
 
 		state, stateErr = NewBootstrapState(fs, "/agent-state.json")
 		Expect(stateErr).NotTo(HaveOccurred())
@@ -102,11 +112,11 @@ func describeLinuxPlatform() {
 			certManager,
 			monitRetryStrategy,
 			devicePathResolver,
-			5*time.Millisecond,
 			state,
 			options,
 			logger,
 			fakeDefaultNetworkResolver,
+			fakeUUIDGenerator,
 		)
 	})
 
@@ -226,6 +236,29 @@ bosh_foobar:...`
 				Expect(cmdRunner.RunCommands[2]).To(Equal([]string{"resize2fs", "-f", "/dev/sda1"}))
 			})
 
+			It("runs growpart and resize2fs for the right root device number", func() {
+				err := platform.SetupEphemeralDiskWithPath("/dev/sda")
+				Expect(err).NotTo(HaveOccurred())
+
+				mountsSearcher := diskManager.FakeMountsSearcher
+				mountsSearcher.SearchMountsMounts = []boshdisk.Mount{{
+					PartitionPath: "/dev/sda2",
+					MountPoint:    "/",
+				}}
+
+				cmdRunner.AddCmdResult(
+					"readlink -f /dev/sda2",
+					fakesys.FakeCmdResult{Error: nil, Stdout: "/dev/sda2"},
+				)
+
+				err = platform.SetupRootDisk("/dev/sdb")
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(cmdRunner.RunCommands)).To(Equal(3))
+				Expect(cmdRunner.RunCommands[1]).To(Equal([]string{"growpart", "/dev/sda", "2"}))
+				Expect(cmdRunner.RunCommands[2]).To(Equal([]string{"resize2fs", "-f", "/dev/sda2"}))
+			})
+
 			It("returns error if it can't find the root device", func() {
 				cmdRunner.AddCmdResult(
 					"readlink -f /dev/sda1",
@@ -290,11 +323,11 @@ bosh_foobar:...`
 					certManager,
 					monitRetryStrategy,
 					devicePathResolver,
-					5*time.Millisecond,
 					state,
 					options,
 					logger,
 					fakeDefaultNetworkResolver,
+					fakeUUIDGenerator,
 				)
 				err := platformWithNoEphemeralDisk.SetupRootDisk("")
 
@@ -333,10 +366,10 @@ bosh_foobar:...`
 	})
 
 	Describe("SetupSSH", func() {
-		It("setup ssh", func() {
+		It("setup ssh with a single key", func() {
 			fs.HomeDirHomePath = "/some/home/dir"
 
-			platform.SetupSSH("some public key", "vcap")
+			platform.SetupSSH([]string{"some public key"}, "vcap")
 
 			sshDirPath := "/some/home/dir/.ssh"
 			sshDirStat := fs.GetFileTestStat(sshDirPath)
@@ -355,6 +388,30 @@ bosh_foobar:...`
 			Expect(os.FileMode(0600)).To(Equal(authKeysStat.FileMode))
 			Expect("vcap").To(Equal(authKeysStat.Username))
 			Expect("some public key").To(Equal(authKeysStat.StringContents()))
+		})
+
+		It("setup ssh with multiple keys", func() {
+			fs.HomeDirHomePath = "/some/home/dir"
+
+			platform.SetupSSH([]string{"some public key", "some other public key"}, "vcap")
+
+			sshDirPath := "/some/home/dir/.ssh"
+			sshDirStat := fs.GetFileTestStat(sshDirPath)
+
+			Expect("vcap").To(Equal(fs.HomeDirUsername))
+
+			Expect(sshDirStat).NotTo(BeNil())
+			Expect(sshDirStat.FileType).To(Equal(fakesys.FakeFileTypeDir))
+			Expect(os.FileMode(0700)).To(Equal(sshDirStat.FileMode))
+			Expect("vcap").To(Equal(sshDirStat.Username))
+
+			authKeysStat := fs.GetFileTestStat(path.Join(sshDirPath, "authorized_keys"))
+
+			Expect(authKeysStat).NotTo(BeNil())
+			Expect(fakesys.FakeFileTypeFile).To(Equal(authKeysStat.FileType))
+			Expect(os.FileMode(0600)).To(Equal(authKeysStat.FileMode))
+			Expect("vcap").To(Equal(authKeysStat.Username))
+			Expect("some public key\nsome other public key").To(Equal(authKeysStat.StringContents()))
 		})
 
 	})
@@ -532,7 +589,9 @@ fake-base-path/data/sys/log/*.log fake-base-path/data/sys/log/.*.log fake-base-p
 		}
 
 		Context("when ephemeral disk path is provided", func() {
-			act := func() error { return platform.SetupEphemeralDiskWithPath("/dev/xvda") }
+			act := func() error {
+				return platform.SetupEphemeralDiskWithPath("/dev/xvda")
+			}
 
 			itSetsUpEphemeralDisk(act)
 
@@ -638,7 +697,9 @@ fake-base-path/data/sys/log/*.log fake-base-path/data/sys/log/.*.log fake-base-p
 		})
 
 		Context("when ephemeral disk path is not provided", func() {
-			act := func() error { return platform.SetupEphemeralDiskWithPath("") }
+			act := func() error {
+				return platform.SetupEphemeralDiskWithPath("")
+			}
 
 			Context("when agent should partition ephemeral disk on root disk", func() {
 				BeforeEach(func() {
@@ -1000,6 +1061,126 @@ fake-base-path/data/sys/log/*.log fake-base-path/data/sys/log/.*.log fake-base-p
 				Expect(mounter.MountCalled).To(BeFalse())
 			})
 		})
+
+		Context("when ScrubEphemeralDisk is true", func() {
+			BeforeEach(func() {
+				options.ScrubEphemeralDisk = true
+				fs.WriteFileString(path.Join(dirProvider.EtcDir(), "stemcell_version"), "1235")
+				fs.WriteFileString(path.Join(dirProvider.DataDir(), ".bosh", "agent_version"), "1234")
+			})
+
+			act := func() error {
+				return platform.SetupEphemeralDiskWithPath("/dev/xvda")
+			}
+
+			Context("when stemcell_version file does not exist", func() {
+				BeforeEach(func() {
+					fs.RemoveAll(path.Join(dirProvider.EtcDir(), "stemcell_version"))
+				})
+
+				It("returns error", func() {
+					fs.WriteFileError = errors.New("Reading stemcell version file")
+					err := act()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("Reading stemcell version file"))
+				})
+			})
+
+			Context("when stemcell_version file exists", func() {
+				Context("when agent_version file does not exist", func() {
+					BeforeEach(func() {
+						fs.RemoveAll(path.Join(dirProvider.DataDir(), ".bosh", "agent_version"))
+					})
+
+					It("writes agent_version file", func() {
+						err := act()
+						Expect(err).ToNot(HaveOccurred())
+
+						agentVersionStats := fs.GetFileTestStat(path.Join(dirProvider.DataDir(), ".bosh", "agent_version"))
+						Expect(agentVersionStats).ToNot(BeNil())
+						Expect(agentVersionStats.StringContents()).To(Equal("1235"))
+					})
+
+					It("returns an error if writing agent_version file fails", func() {
+						fs.WriteFileError = errors.New("fake-write-file-err")
+						err := act()
+						Expect(err).To(HaveOccurred())
+						Expect(err.Error()).To(ContainSubstring("fake-write-file-err"))
+					})
+				})
+
+				Context("when agent_version file exists", func() {
+					It("returns an error if reading agent_version file fails", func() {
+						fs.ReadFileError = errors.New("fake-read-file-err")
+						err := act()
+						Expect(err).To(HaveOccurred())
+						Expect(err.Error()).To(ContainSubstring("fake-read-file-err"))
+					})
+
+					Context("when agent version is same with stemcell version", func() {
+						BeforeEach(func() {
+							fs.WriteFileString(path.Join(dirProvider.EtcDir(), "stemcell_version"), "1236")
+							fs.WriteFileString(path.Join(dirProvider.DataDir(), ".bosh", "agent_version"), "1236")
+						})
+
+						It("does nothing", func() {
+							err := act()
+							Expect(err).ToNot(HaveOccurred())
+
+							agentVersionStats := fs.GetFileTestStat(path.Join(dirProvider.DataDir(), ".bosh", "agent_version"))
+							Expect(agentVersionStats).ToNot(BeNil())
+							stemcellVersionStats := fs.GetFileTestStat(path.Join(dirProvider.EtcDir(), "stemcell_version"))
+							Expect(stemcellVersionStats).ToNot(BeNil())
+							Expect(agentVersionStats.StringContents()).To(Equal(stemcellVersionStats.StringContents()))
+						})
+					})
+
+					Context("when agent version differs with stemcell version", func() {
+						BeforeEach(func() {
+							fs.WriteFileString(path.Join(dirProvider.EtcDir(), "stemcell_version"), "1239")
+							fs.WriteFileString(path.Join(dirProvider.DataDir(), ".bosh", "agent_version"), "1238")
+							fs.SetGlob(path.Join("/fake-dir", "data", "", "*"), []string{"/fake-dir/data/fake-file1", "/fake-dir/data/fakedir"})
+						})
+
+						It("returns an error if removing files fails", func() {
+							fs.RemoveAllStub = func(_ string) error {
+								return errors.New("fake-remove-all-error")
+							}
+
+							err := act()
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(ContainSubstring("fake-remove-all-error"))
+						})
+
+						It("returns an error if updating agent_version file fails", func() {
+							fs.WriteFileError = errors.New("fake-update-file-err")
+							err := act()
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(ContainSubstring("fake-update-file-err"))
+						})
+
+						It("removes all contents", func() {
+							fs.WriteFileString(path.Join(dirProvider.DataDir(), "fake-file1"), "fake")
+							fs.WriteFileString(path.Join(dirProvider.DataDir(), "fakedir", "fake-file2"), "1234")
+							err := act()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(fs.FileExists(path.Join(dirProvider.DataDir(), "fake-file1"))).To(BeFalse())
+							Expect(fs.FileExists(path.Join(dirProvider.DataDir(), "fakedir", "fake-file2"))).To(BeFalse())
+						})
+
+						It("updates agent_version file", func() {
+							err := act()
+							Expect(err).ToNot(HaveOccurred())
+
+							agentVersionStats := fs.GetFileTestStat(path.Join(dirProvider.DataDir(), ".bosh", "agent_version"))
+							Expect(agentVersionStats).ToNot(BeNil())
+							Expect(agentVersionStats.StringContents()).To(Equal("1239"))
+						})
+					})
+				})
+			})
+		})
+
 	})
 
 	Describe("SetupRawEphemeralDisks", func() {
@@ -1278,8 +1459,68 @@ Number  Start   End     Size    File system  Name             Flags
 		})
 	})
 
+	Describe("SetupHomeDir", func() {
+		act := func() error {
+			return platform.SetupHomeDir()
+		}
+
+		var mounter *fakedisk.FakeMounter
+		BeforeEach(func() {
+			mounter = diskManager.FakeMounter
+		})
+
+		Context("/home is not mounted", func() {
+			It("mounts the /home dir", func() {
+				err := act()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(mounter.MountCalled).To(BeTrue())
+				Expect(mounter.MountPartitionPaths).To(ContainElement("/home"))
+				Expect(mounter.MountMountPoints).To(ContainElement("/home"))
+				Expect(mounter.MountMountOptions).To(ContainElement([]string{"--bind"}))
+				Expect(mounter.RemountInPlaceCalled).To(BeTrue())
+				Expect(mounter.RemountInPlaceMountPoints).To(ContainElement("/home"))
+				Expect(mounter.RemountInPlaceMountOptions).To(ContainElement([]string{"-o", "nodev"}))
+			})
+
+			It("return error if it cannot mount", func() {
+				mounter.MountErr = errors.New("fake-mount-error")
+				err := act()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("fake-mount-error"))
+				Expect(mounter.RemountInPlaceCalled).To(BeFalse())
+			})
+
+			It("return error if it cannot remount in place", func() {
+				mounter.RemountInPlaceErr = errors.New("fake-remount-error")
+				err := act()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("fake-remount-error"))
+				Expect(mounter.MountCalled).To(BeTrue())
+			})
+		})
+
+		Context("/home is mounted", func() {
+			BeforeEach(func() {
+				mounter.IsMountedStub = func(devicePathOrMountPoint string) (bool, error) {
+					if devicePathOrMountPoint == "/home" {
+						return true, nil
+					}
+					return false, nil
+				}
+			})
+			It("does no op", func() {
+				err := act()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(mounter.MountCalled).To(BeFalse())
+				Expect(mounter.RemountInPlaceCalled).To(BeFalse())
+			})
+		})
+	})
+
 	Describe("SetupTmpDir", func() {
-		act := func() error { return platform.SetupTmpDir() }
+		act := func() error {
+			return platform.SetupTmpDir()
+		}
 
 		var mounter *fakedisk.FakeMounter
 		BeforeEach(func() {
@@ -1290,9 +1531,10 @@ Number  Start   End     Size    File system  Name             Flags
 			err := act()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(cmdRunner.RunCommands[0]).To(Equal([]string{"chown", "root:vcap", "/tmp"}))
-			Expect(cmdRunner.RunCommands[1]).To(Equal([]string{"chmod", "0770", "/tmp"}))
-			Expect(cmdRunner.RunCommands[2]).To(Equal([]string{"chmod", "0700", "/var/tmp"}))
+			Expect(cmdRunner.RunCommands).To(ContainElement([]string{"chown", "root:vcap", "/tmp"}))
+			Expect(cmdRunner.RunCommands).To(ContainElement([]string{"chmod", "0770", "/tmp"}))
+			Expect(cmdRunner.RunCommands).To(ContainElement([]string{"chown", "root:vcap", "/var/tmp"}))
+			Expect(cmdRunner.RunCommands).To(ContainElement([]string{"chmod", "0770", "/var/tmp"}))
 		})
 
 		It("creates new temp dir", func() {
@@ -1323,92 +1565,233 @@ Number  Start   End     Size    File system  Name             Flags
 			// uses os package; no way to trigger err
 		})
 
-		ItDoesNotTryToUseLoopDevice := func() {
-			It("does not create new tmp filesystem", func() {
-				act()
-				for _, cmd := range cmdRunner.RunCommands {
-					Expect(cmd[0]).ToNot(Equal("truncate"))
-					Expect(cmd[0]).ToNot(Equal("mke2fs"))
-				}
-			})
-
-			It("does not try to mount anything /tmp", func() {
-				act()
-				Expect(len(mounter.MountPartitionPaths)).To(Equal(0))
-			})
-		}
-
 		Context("when UseDefaultTmpDir option is set to false", func() {
 			BeforeEach(func() {
 				options.UseDefaultTmpDir = false
 			})
 
-			Context("when /tmp is not a mount point", func() {
-				BeforeEach(func() {
-					mounter.IsMountPointResult = false
+			It("creates a root_tmp folder", func() {
+				err := act()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cmdRunner.RunCommands).To(ContainElement([]string{"mkdir", "-p", "/fake-dir/data/root_tmp"}))
+			})
+
+			It("changes permissions on the new bind mount folder", func() {
+				err := act()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cmdRunner.RunCommands).To(ContainElement([]string{"chmod", "0770", "/fake-dir/data/root_tmp"}))
+			})
+
+			Context("mounting root_tmp into /tmp", func() {
+				Context("when /tmp is not a mount point", func() {
+					BeforeEach(func() {
+						mounter.IsMountPointResult = false
+					})
+
+					It("bind mounts it in /tmp", func() {
+						err := act()
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(mounter.MountPartitionPaths).To(ContainElement("/fake-dir/data/root_tmp"))
+						Expect(mounter.MountMountPoints).To(ContainElement("/tmp"))
+						Expect(mounter.MountMountOptions).To(ContainElement([]string{"--bind"}))
+
+						Expect(mounter.RemountInPlaceCalled).To(Equal(true))
+						Expect(mounter.RemountInPlaceMountPoints).To(ContainElement("/tmp"))
+						Expect(mounter.RemountInPlaceMountOptions).To(ContainElement([]string{"-o", "nodev", "-o", "noexec", "-o", "nosuid"}))
+					})
+
+					It("changes permissions for the system /tmp folder", func() {
+						err := act()
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(cmdRunner.RunCommands).To(ContainElement([]string{"chown", "root:vcap", "/tmp"}))
+					})
 				})
 
-				It("creates new tmp filesystem of 128MB placed in data dir", func() {
-					err := act()
-					Expect(err).NotTo(HaveOccurred())
+				Context("when /tmp is a mount point", func() {
+					BeforeEach(func() {
+						mounter.IsMountedStub = func(devicePathOrMountPoint string) (bool, error) {
+							if devicePathOrMountPoint == "/tmp" {
+								return true, nil
+							}
+							return false, nil
+						}
+					})
 
-					Expect(cmdRunner.RunCommands[3]).To(Equal([]string{"truncate", "-s", "128M", "/fake-dir/data/root_tmp"}))
-					Expect(cmdRunner.RunCommands[4]).To(Equal([]string{"chmod", "0700", "/fake-dir/data/root_tmp"}))
-					Expect(cmdRunner.RunCommands[5]).To(Equal([]string{"mke2fs", "-t", "ext4", "-m", "1", "-F", "/fake-dir/data/root_tmp"}))
+					Context("when remount fails", func() {
+						BeforeEach(func() {
+							mounter.RemountInPlaceErr = errors.New("remount error")
+						})
+						It("returns an error", func() {
+							err := act()
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(Equal("remount error"))
+						})
+					})
+
+					It("returns without an error", func() {
+						err := act()
+						Expect(mounter.IsMountedArgsForCall(0)).To(Equal("/tmp"))
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(mounter.RemountInPlaceCalled).To(Equal(true))
+						Expect(mounter.RemountInPlaceMountPoints).To(ContainElement("/tmp"))
+						Expect(mounter.RemountInPlaceMountOptions).To(ContainElement([]string{"-o", "nodev", "-o", "noexec", "-o", "nosuid"}))
+					})
+
+					It("does not create new tmp filesystem", func() {
+						act()
+						for _, cmd := range cmdRunner.RunCommands {
+							Expect(cmd[0]).ToNot(Equal("truncate"))
+							Expect(cmd[0]).ToNot(Equal("mke2fs"))
+						}
+					})
+
+					It("does not try to mount root_tmp into /tmp", func() {
+						act()
+						Expect(mounter.MountMountPoints).ToNot(ContainElement("/tmp"))
+					})
 				})
 
-				It("mounts the new tmp filesystem over /tmp", func() {
-					err := act()
-					Expect(err).NotTo(HaveOccurred())
+				Context("when /tmp cannot be determined if it is a mount point", func() {
+					BeforeEach(func() {
+						mounter.IsMountedStub = func(devicePathOrMountPoint string) (bool, error) {
+							if devicePathOrMountPoint == "/tmp" {
+								return false, errors.New("fake-is-mounted-error")
+							}
+							return false, nil
+						}
+					})
 
-					Expect(len(mounter.MountPartitionPaths)).To(Equal(1))
-					Expect(mounter.MountPartitionPaths[0]).To(Equal("/fake-dir/data/root_tmp"))
-					Expect(mounter.MountMountPoints[0]).To(Equal("/tmp"))
-					Expect(mounter.MountMountOptions[0]).To(Equal([]string{"-t", "ext4", "-o", "loop,noexec"}))
-				})
+					It("returns error", func() {
+						err := act()
+						Expect(err).To(HaveOccurred())
+						Expect(err.Error()).To(ContainSubstring("fake-is-mounted-error"))
+					})
 
-				It("returns error if mounting the new tmp filesystem fails", func() {
-					mounter.MountErr = errors.New("fake-mount-error")
+					It("does not create new tmp filesystem", func() {
+						act()
+						for _, cmd := range cmdRunner.RunCommands {
+							Expect(cmd[0]).ToNot(Equal("truncate"))
+							Expect(cmd[0]).ToNot(Equal("mke2fs"))
+						}
+					})
 
-					err := act()
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("fake-mount-error"))
-				})
-
-				It("changes permissions on /tmp again because it is a new mount", func() {
-					err := act()
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(cmdRunner.RunCommands[6]).To(Equal([]string{"chown", "root:vcap", "/tmp"}))
-					Expect(cmdRunner.RunCommands[7]).To(Equal([]string{"chmod", "0770", "/tmp"}))
+					It("does not try to mount /tmp", func() {
+						act()
+						Expect(mounter.MountMountPoints).ToNot(ContainElement("/tmp"))
+					})
 				})
 			})
 
-			Context("when /tmp is a mount point", func() {
-				BeforeEach(func() {
-					mounter.IsMountPointResult = true
+			Context("mounting root_tmp into /var/tmp", func() {
+				Context("when /var/tmp is not a mount point", func() {
+					BeforeEach(func() {
+						mounter.IsMountedResult = false
+					})
+
+					It("bind mounts it in /var/tmp", func() {
+						err := act()
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(len(mounter.MountPartitionPaths)).To(Equal(2))
+						Expect(mounter.MountPartitionPaths[1]).To(Equal("/fake-dir/data/root_tmp"))
+						Expect(mounter.MountMountPoints[1]).To(Equal("/var/tmp"))
+						Expect(mounter.MountMountOptions[1]).To(ConsistOf("--bind"))
+
+						Expect(mounter.RemountInPlaceCalled).To(Equal(true))
+						Expect(mounter.RemountInPlaceMountPoints).To(ContainElement("/var/tmp"))
+						Expect(mounter.RemountInPlaceMountOptions).To(ContainElement([]string{"-o", "nodev", "-o", "noexec", "-o", "nosuid"}))
+					})
+
+					It("changes permissions for the system /var/tmp folder", func() {
+						err := act()
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(cmdRunner.RunCommands).To(ContainElement([]string{"chown", "root:vcap", "/var/tmp"}))
+					})
 				})
 
-				It("returns without an error", func() {
+				Context("when /var/tmp is a mount point", func() {
+					BeforeEach(func() {
+						mounter.IsMountedStub = func(devicePathOrMountPoint string) (bool, error) {
+							if devicePathOrMountPoint == "/var/tmp" {
+								return true, nil
+							}
+							return false, nil
+						}
+					})
+
+					It("returns without an error", func() {
+						err := act()
+						Expect(mounter.IsMountedArgsForCall(0)).To(Equal("/tmp"))
+						Expect(mounter.IsMountedArgsForCall(1)).To(Equal("/var/tmp"))
+						Expect(err).ToNot(HaveOccurred())
+					})
+
+					It("does not create new tmp filesystem", func() {
+						act()
+						for _, cmd := range cmdRunner.RunCommands {
+							Expect(cmd[0]).ToNot(Equal("truncate"))
+							Expect(cmd[0]).ToNot(Equal("mke2fs"))
+						}
+					})
+
+					It("does not try to mount root_tmp into /var/tmp", func() {
+						act()
+						Expect(mounter.MountMountPoints).ToNot(ContainElement("/var/tmp"))
+					})
+				})
+
+				Context("when /var/tmp cannot be determined if it is a mount point", func() {
+					BeforeEach(func() {
+						mounter.IsMountedStub = func(devicePathOrMountPoint string) (bool, error) {
+							if devicePathOrMountPoint == "/var/tmp" {
+								return false, errors.New("fake-is-mounted-error")
+							}
+							return false, nil
+						}
+					})
+
+					It("returns error", func() {
+						err := act()
+						Expect(err).To(HaveOccurred())
+						Expect(err.Error()).To(ContainSubstring("fake-is-mounted-error"))
+					})
+
+					It("does not create new tmp filesystem", func() {
+						act()
+						for _, cmd := range cmdRunner.RunCommands {
+							Expect(cmd[0]).ToNot(Equal("truncate"))
+							Expect(cmd[0]).ToNot(Equal("mke2fs"))
+						}
+					})
+
+					It("does not try to mount /var/tmp", func() {
+						act()
+						Expect(mounter.MountMountPoints).ToNot(ContainElement("/var/tmp"))
+					})
+				})
+			})
+
+			Context("mounting after agent has been restarted", func() {
+				BeforeEach(func() {
+					mounter.IsMountedStub = func(devicePathOrMountPoint string) (bool, error) {
+						if devicePathOrMountPoint == "/tmp" {
+							return true, nil
+						}
+						return false, nil
+					}
+				})
+
+				It("mounts unmounted tmp dirs", func() {
 					err := act()
 					Expect(err).ToNot(HaveOccurred())
+					Expect(mounter.MountMountPoints).To(ContainElement("/var/tmp"))
+					Expect(mounter.MountMountPoints).ToNot(ContainElement("/tmp"))
 				})
-
-				ItDoesNotTryToUseLoopDevice()
-			})
-
-			Context("when /tmp cannot be determined if it is a mount point", func() {
-				BeforeEach(func() {
-					mounter.IsMountPointErr = errors.New("fake-is-mount-point-error")
-				})
-
-				It("returns error", func() {
-					err := act()
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("fake-is-mount-point-error"))
-				})
-
-				ItDoesNotTryToUseLoopDevice()
 			})
 		})
 
@@ -1422,14 +1805,186 @@ Number  Start   End     Size    File system  Name             Flags
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			ItDoesNotTryToUseLoopDevice()
+			It("does not create new tmp filesystem", func() {
+				act()
+				for _, cmd := range cmdRunner.RunCommands {
+					Expect(cmd[0]).ToNot(Equal("truncate"))
+					Expect(cmd[0]).ToNot(Equal("mke2fs"))
+				}
+			})
+
+			It("does not try to mount anything", func() {
+				act()
+				Expect(len(mounter.MountPartitionPaths)).To(Equal(0))
+			})
+		})
+	})
+
+	Describe("SetupLogDir", func() {
+		act := func() error {
+			return platform.SetupLogDir()
+		}
+
+		var mounter *fakedisk.FakeMounter
+		BeforeEach(func() {
+			mounter = diskManager.FakeMounter
+		})
+
+		It("creates a root_log folder with permissions", func() {
+			err := act()
+			Expect(err).NotTo(HaveOccurred())
+			testFileStat := fs.GetFileTestStat("/fake-dir/data/root_log")
+			Expect(testFileStat.FileType).To(Equal(fakesys.FakeFileTypeDir))
+			Expect(testFileStat.FileMode).To(Equal(os.FileMode(0775)))
+		})
+
+		It("sets the permission on /var/log to 770", func() {
+			err := act()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(cmdRunner.RunCommands[0]).To(Equal([]string{"chmod", "0770", "/fake-dir/data/root_log"}))
+		})
+
+		It("creates an audit dir in root_log folder", func() {
+			err := act()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cmdRunner.RunCommands[1]).To(Equal([]string{"mkdir", "-p", "/fake-dir/data/root_log/audit"}))
+		})
+
+		It("changes permissions on the audit directory", func() {
+			err := act()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(cmdRunner.RunCommands[2]).To(Equal([]string{"chmod", "0750", "/fake-dir/data/root_log/audit"}))
+		})
+
+		It("changes ownership on the new bind mount folder", func() {
+			err := act()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(cmdRunner.RunCommands[3]).To(Equal([]string{"chown", "root:syslog", "/fake-dir/data/root_log"}))
+		})
+
+		Context("mounting root_log into /var/log", func() {
+			Context("when /var/log is not a mount point", func() {
+				BeforeEach(func() {
+					mounter.IsMountPointResult = false
+				})
+
+				It("bind mounts it in /var/log", func() {
+					err := act()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(mounter.MountPartitionPaths).To(ContainElement("/fake-dir/data/root_log"))
+					Expect(mounter.MountMountPoints).To(ContainElement("/var/log"))
+					Expect(mounter.MountMountOptions).To(ContainElement([]string{"--bind"}))
+				})
+			})
+
+			Context("when /var/log is a mount point", func() {
+				BeforeEach(func() {
+					mounter.IsMountedStub = func(devicePathOrMountPoint string) (bool, error) {
+						if devicePathOrMountPoint == "/var/log" {
+							return true, nil
+						}
+						return false, nil
+					}
+				})
+
+				It("returns without an error", func() {
+					err := act()
+					Expect(mounter.IsMountedArgsForCall(0)).To(Equal("/var/log"))
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("does not try to mount root_log into /var/log", func() {
+					act()
+					Expect(mounter.MountMountPoints).ToNot(ContainElement("/var/log"))
+				})
+			})
+
+			Context("when /var/log cannot be determined if it is a mount point", func() {
+				BeforeEach(func() {
+					mounter.IsMountedStub = func(devicePathOrMountPoint string) (bool, error) {
+						if devicePathOrMountPoint == "/var/log" {
+							return false, errors.New("fake-is-mounted-error")
+						}
+						return false, nil
+					}
+				})
+
+				It("returns error", func() {
+					err := act()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("fake-is-mounted-error"))
+				})
+
+				It("does not try to mount /var/log", func() {
+					act()
+					Expect(mounter.MountMountPoints).ToNot(ContainElement("/var/log"))
+				})
+			})
+		})
+	})
+
+	Describe("SetupBlobDir", func() {
+		act := func() error {
+			return platform.SetupBlobsDir()
+		}
+
+		It("creates a blobs folder with correct permissions", func() {
+			err := act()
+			Expect(err).NotTo(HaveOccurred())
+			testFileStat := fs.GetFileTestStat("/fake-dir/data/blobs")
+			Expect(testFileStat.FileType).To(Equal(fakesys.FakeFileTypeDir))
+			Expect(testFileStat.FileMode).To(Equal(os.FileMode(0700)))
+		})
+
+		It("creates a blobs folder with correct ownership", func() {
+			err := act()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cmdRunner.RunCommands).To(ContainElement([]string{"chown", "root:vcap", "/fake-dir/data/blobs"}))
+		})
+	})
+
+	Describe("SetupLoggingAndAuditing", func() {
+		act := func() error {
+			return platform.SetupLoggingAndAuditing()
+		}
+
+		Context("when logging and auditing startup script runs successfully", func() {
+			BeforeEach(func() {
+				fakeResult := fakesys.FakeCmdResult{Error: nil}
+				cmdRunner.AddCmdResult("/var/vcap/bosh/bin/bosh-start-logging-and-auditing", fakeResult)
+			})
+
+			It("returns no error", func() {
+				err := act()
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cmdRunner.RunCommands[0]).To(Equal([]string{"/var/vcap/bosh/bin/bosh-start-logging-and-auditing"}))
+			})
+		})
+
+		Context("when logging and auditing startup script runs successfully", func() {
+			BeforeEach(func() {
+				fakeResult := fakesys.FakeCmdResult{Error: errors.New("FAIL")}
+				cmdRunner.AddCmdResult("/var/vcap/bosh/bin/bosh-start-logging-and-auditing", fakeResult)
+			})
+
+			It("returns an error", func() {
+				err := act()
+
+				Expect(err).To(HaveOccurred())
+				Expect(cmdRunner.RunCommands[0]).To(Equal([]string{"/var/vcap/bosh/bin/bosh-start-logging-and-auditing"}))
+			})
 		})
 	})
 
 	Describe("MountPersistentDisk", func() {
 		act := func() error {
 			return platform.MountPersistentDisk(
-				boshsettings.DiskSettings{Path: "fake-volume-id"},
+				boshsettings.DiskSettings{ID: "fake-unique-id", Path: "fake-volume-id"},
 				"/mnt/point",
 			)
 		}
@@ -1445,7 +2000,7 @@ Number  Start   End     Size    File system  Name             Flags
 			mounter = diskManager.FakeMounter
 		})
 
-		Context("when the size of the disk is larger than or equals 2 Terrabytes", func() {
+		Context("when the size of the disk is larger than or equal to 2 terabytes", func() {
 
 			BeforeEach(func() {
 				diskManager.FakeDiskUtil.GetBlockDeviceSizeSize = uint64(2199023255552)
@@ -1460,7 +2015,7 @@ Number  Start   End     Size    File system  Name             Flags
 			})
 		})
 
-		Context("when the size of the disk is less than 2 Terabytes", func() {
+		Context("when the size of the disk is less than 2 terabytes", func() {
 
 			BeforeEach(func() {
 				diskManager.FakeDiskUtil.GetBlockDeviceSizeSize = uint64(2199023255551)
@@ -1583,6 +2138,18 @@ Number  Start   End     Size    File system  Name             Flags
 					Expect(mounter.MountMountPoints).To(Equal([]string{"/mnt/point"}))
 					Expect(mounter.MountMountOptions).To(Equal([][]string{nil}))
 				})
+
+				It("generates the managed disk settings file", func() {
+					err := act()
+					Expect(err).ToNot(HaveOccurred())
+
+					var contents string
+					managedSettingsPath := filepath.Join(platform.GetDirProvider().BoshDir(), "managed_disk_settings.json")
+
+					contents, err = platform.GetFs().ReadFileString(managedSettingsPath)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(contents).To(Equal("fake-unique-id"))
+				})
 			})
 		})
 
@@ -1674,6 +2241,18 @@ Number  Start   End     Size    File system  Name             Flags
 
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(Equal("Formatting partition with xfs: Oh noes!"))
+				})
+
+				It("returns an error when updating managed_disk_settings.json fails", func() {
+					fs.WriteFileError = errors.New("Oh noes!")
+
+					err := platform.MountPersistentDisk(
+						boshsettings.DiskSettings{Path: "fake-volume-id", FileSystemType: boshdisk.FileSystemXFS},
+						"/mnt/point",
+					)
+
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(Equal("Writing managed_disk_settings.json: Oh noes!"))
 				})
 
 				It("mounts the disk", func() {
@@ -1879,6 +2458,55 @@ Number  Start   End     Size    File system  Name             Flags
 		})
 	})
 
+	Describe("AssociateDisk", func() {
+		var (
+			diskName     string
+			diskSettings boshsettings.DiskSettings
+		)
+
+		BeforeEach(func() {
+			diskName = "cool_disk"
+			diskSettings = boshsettings.DiskSettings{Path: "/dev/path/to/cool_disk"}
+			devicePathResolver.RealDevicePath = "/dev/path/to/cool_disk"
+		})
+
+		It("Creates a symlink a disk", func() {
+			err := platform.AssociateDisk(diskName, diskSettings)
+			Expect(err).ToNot(HaveOccurred())
+
+			path, err := fs.Readlink("/fake-dir/instance/disks/cool_disk")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(path).To(Equal("/dev/path/to/cool_disk"))
+		})
+
+		Context("when discovering real device path returns an error", func() {
+			BeforeEach(func() {
+				devicePathResolver.GetRealDevicePathErr = errors.New("barf")
+			})
+
+			It("returns an error", func() {
+				err := platform.AssociateDisk(diskName, diskSettings)
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("when symlinking returns an error", func() {
+			BeforeEach(func() {
+				fs.SymlinkError = &os.LinkError{
+					Op:  "Symlink",
+					Old: "/dev/path/to/cool_disk",
+					New: "/fake-dir/instance/disks/cool_disk",
+					Err: errors.New("some linking error"),
+				}
+			})
+
+			It("returns an error", func() {
+				err := platform.AssociateDisk(diskName, diskSettings)
+				Expect(err).To(HaveOccurred())
+			})
+		})
+	})
+
 	Describe("GetFileContentsFromCDROM", func() {
 		It("delegates to cdutil", func() {
 			cdutil.GetFilesContentsContents = [][]byte{[]byte("fake-contents")}
@@ -1975,7 +2603,7 @@ Number  Start   End     Size    File system  Name             Flags
 						isMounted, err := act()
 						Expect(err).NotTo(HaveOccurred())
 						Expect(isMounted).To(BeTrue())
-						Expect(mounter.IsMountedDevicePathOrMountPoint).To(Equal(expectedCheckedMountPoint))
+						Expect(mounter.IsMountedArgsForCall(0)).To(Equal(expectedCheckedMountPoint))
 					})
 
 					It("returns false if mount point does not exist", func() {
@@ -1984,7 +2612,7 @@ Number  Start   End     Size    File system  Name             Flags
 						isMounted, err := act()
 						Expect(err).NotTo(HaveOccurred())
 						Expect(isMounted).To(BeFalse())
-						Expect(mounter.IsMountedDevicePathOrMountPoint).To(Equal(expectedCheckedMountPoint))
+						Expect(mounter.IsMountedArgsForCall(0)).To(Equal(expectedCheckedMountPoint))
 					})
 				})
 
@@ -1997,7 +2625,7 @@ Number  Start   End     Size    File system  Name             Flags
 						Expect(err).To(HaveOccurred())
 						Expect(err.Error()).To(ContainSubstring("fake-is-mounted-err"))
 						Expect(isMounted).To(BeFalse())
-						Expect(mounter.IsMountedDevicePathOrMountPoint).To(Equal(expectedCheckedMountPoint))
+						Expect(mounter.IsMountedArgsForCall(0)).To(Equal(expectedCheckedMountPoint))
 					})
 				})
 			}
@@ -2020,7 +2648,7 @@ Number  Start   End     Size    File system  Name             Flags
 						isMounted, err := act()
 						Expect(err).NotTo(HaveOccurred())
 						Expect(isMounted).To(BeTrue())
-						Expect(mounter.IsMountedDevicePathOrMountPoint).To(Equal(expectedCheckedMountPoint))
+						Expect(mounter.IsMountedArgsForCall(0)).To(Equal(expectedCheckedMountPoint))
 					})
 
 					It("returns false if mount point does not exist", func() {
@@ -2029,7 +2657,7 @@ Number  Start   End     Size    File system  Name             Flags
 						isMounted, err := act()
 						Expect(err).NotTo(HaveOccurred())
 						Expect(isMounted).To(BeFalse())
-						Expect(mounter.IsMountedDevicePathOrMountPoint).To(Equal(expectedCheckedMountPoint))
+						Expect(mounter.IsMountedArgsForCall(0)).To(Equal(expectedCheckedMountPoint))
 					})
 				})
 
@@ -2042,7 +2670,7 @@ Number  Start   End     Size    File system  Name             Flags
 						Expect(err).To(HaveOccurred())
 						Expect(err.Error()).To(ContainSubstring("fake-is-mounted-err"))
 						Expect(isMounted).To(BeFalse())
-						Expect(mounter.IsMountedDevicePathOrMountPoint).To(Equal(expectedCheckedMountPoint))
+						Expect(mounter.IsMountedArgsForCall(0)).To(Equal(expectedCheckedMountPoint))
 					})
 				})
 			}
@@ -2165,7 +2793,7 @@ unit: sectors
 		It("creates a symlink between /etc/service/monit and /etc/sv/monit", func() {
 			err := platform.StartMonit()
 			Expect(err).NotTo(HaveOccurred())
-			target, _ := fs.ReadLink(path.Join("/etc", "service", "monit"))
+			target, _ := fs.ReadAndFollowLink(path.Join("/etc", "service", "monit"))
 			Expect(target).To(Equal(path.Join("/etc", "sv", "monit")))
 		})
 
@@ -2235,7 +2863,9 @@ unit: sectors
 		})
 
 		It("returns error if removing persistent rules file fails", func() {
-			fs.RemoveAllError = errors.New("fake-remove-all-error")
+			fs.RemoveAllStub = func(_ string) error {
+				return errors.New("fake-remove-all-error")
+			}
 
 			err := platform.PrepareForNetworkingChange()
 			Expect(err).To(HaveOccurred())
@@ -2323,6 +2953,84 @@ unit: sectors
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(cmdRunner.RunCommands)).To(Equal(1))
 			Expect(cmdRunner.RunCommands[0]).To(Equal([]string{"rm", "-rf", "dummy-compiler"}))
+		})
+	})
+
+	Describe("SaveDNSRecords", func() {
+		var (
+			dnsRecords boshsettings.DNSRecords
+
+			defaultEtcHosts string
+		)
+
+		BeforeEach(func() {
+			dnsRecords = boshsettings.DNSRecords{
+				Records: [][2]string{
+					{"fake-ip0", "fake-name0"},
+					{"fake-ip1", "fake-name1"},
+				},
+			}
+
+			defaultEtcHosts = strings.Replace(EtcHostsTemplate, "{{ . }}", "fake-hostname", -1)
+		})
+
+		It("fails generating a UUID", func() {
+			fakeUUIDGenerator.GenerateError = errors.New("fake-error")
+
+			err := platform.SaveDNSRecords(dnsRecords, "fake-hostname")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Generating UUID"))
+		})
+
+		It("fails to create intermediary /etc/hosts-<uuid> file", func() {
+			fs.WriteFileErrors["/etc/hosts-fake-uuid-0"] = errors.New("fake-error")
+
+			err := platform.SaveDNSRecords(dnsRecords, "fake-hostname")
+			Expect(err).To(HaveOccurred())
+
+			Expect(err.Error()).To(ContainSubstring("Writing to /etc/hosts-fake-uuid-0"))
+		})
+
+		It("fails to renames intermediary /etc/hosts-<uuid> file to /etc/hosts", func() {
+			fs.RenameError = errors.New("fake-error")
+
+			err := platform.SaveDNSRecords(dnsRecords, "fake-hostname")
+			Expect(err).To(HaveOccurred())
+
+			Expect(err.Error()).To(ContainSubstring("Renaming /etc/hosts-fake-uuid-0 to /etc/hosts"))
+		})
+
+		It("renames intermediary /etc/hosts-<uuid> atomically to /etc/hosts", func() {
+			err := platform.SaveDNSRecords(dnsRecords, "fake-hostname")
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(fs.RenameError).ToNot(HaveOccurred())
+
+			Expect(len(fs.RenameOldPaths)).To(Equal(1))
+			Expect(fs.RenameOldPaths).To(ContainElement("/etc/hosts-fake-uuid-0"))
+
+			Expect(len(fs.RenameNewPaths)).To(Equal(1))
+			Expect(fs.RenameNewPaths).To(ContainElement("/etc/hosts"))
+		})
+
+		It("preserves the default DNS records in '/etc/hosts'", func() {
+			err := platform.SaveDNSRecords(dnsRecords, "fake-hostname")
+			Expect(err).ToNot(HaveOccurred())
+
+			hostsFileContents, err := fs.ReadFile("/etc/hosts")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(hostsFileContents)).To(ContainSubstring(defaultEtcHosts))
+		})
+
+		It("writes the new DNS records in '/etc/hosts'", func() {
+			err := platform.SaveDNSRecords(dnsRecords, "fake-hostname")
+			Expect(err).ToNot(HaveOccurred())
+
+			hostsFileContents, err := fs.ReadFile("/etc/hosts")
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(hostsFileContents).Should(MatchRegexp("fake-ip0\\s+fake-name0\\n"))
+			Expect(hostsFileContents).Should(MatchRegexp("fake-ip1\\s+fake-name1\\n"))
 		})
 	})
 }

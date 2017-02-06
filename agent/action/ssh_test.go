@@ -18,11 +18,11 @@ import (
 func validatePlatformSetupWithPassword(platform *fakeplatform.FakePlatform, expectedPwd string) {
 	Expect(platform.CreateUserUsername).To(Equal("fake-user"))
 	Expect(platform.CreateUserPassword).To(Equal(expectedPwd))
-	Expect(platform.CreateUserBasePath).To(Equal("/foo/bosh_ssh"))
+	Expect(platform.CreateUserBasePath).To(boshassert.MatchPath("/foo/bosh_ssh"))
 	Expect(platform.AddUserToGroupsGroups["fake-user"]).To(Equal(
 		[]string{boshsettings.VCAPUsername, boshsettings.AdminGroup, boshsettings.SudoersGroup},
 	))
-	Expect(platform.SetupSSHPublicKeys["fake-user"]).To(Equal("fake-public-key"))
+	Expect(platform.SetupSSHPublicKeys["fake-user"]).To(ConsistOf("fake-public-key"))
 }
 
 func buildSSHAction(settingsService boshsettings.Service) (*fakeplatform.FakePlatform, SSHAction) {
@@ -46,13 +46,12 @@ var _ = Describe("SSHAction", func() {
 			platform, action = buildSSHAction(settingsService)
 		})
 
-		It("ssh should be synchronous", func() {
-			Expect(action.IsAsynchronous()).To(BeFalse())
-		})
+		AssertActionIsNotAsynchronous(action)
+		AssertActionIsNotPersistent(action)
+		AssertActionIsLoggable(action)
 
-		It("is not persistent", func() {
-			Expect(action.IsPersistent()).To(BeFalse())
-		})
+		AssertActionIsNotResumable(action)
+		AssertActionIsNotCancelable(action)
 	})
 
 	Describe("Run", func() {

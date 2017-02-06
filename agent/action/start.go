@@ -36,6 +36,10 @@ func (a StartAction) IsPersistent() bool {
 	return false
 }
 
+func (a StartAction) IsLoggable() bool {
+	return true
+}
+
 func (a StartAction) Run() (value string, err error) {
 
 	if err = a.actionHook.OnStartAction(); err != nil {

@@ -25,6 +25,7 @@ func NewFactory(
 	settingsService boshsettings.Service,
 	platform boshplatform.Platform,
 	blobstore boshblob.Blobstore,
+	blobManager boshblob.BlobManagerInterface,
 	taskService boshtask.Service,
 	notifier boshnotif.Notifier,
 	applier boshappl.Applier,
@@ -52,7 +53,7 @@ func NewFactory(
 			// VM admin
 			"ssh":             NewSSH(settingsService, platform, dirProvider, logger),
 			"fetch_logs":      NewFetchLogs(compressor, copier, blobstore, dirProvider),
-			"update_settings": NewUpdateSettings(certManager, logger),
+			"update_settings": NewUpdateSettings(settingsService, platform, certManager, logger),
 
 			// Job management
 			"prepare":    NewPrepare(applier),
@@ -68,6 +69,9 @@ func NewFactory(
 			"compile_package":    NewCompilePackage(compiler),
 			"release_apply_spec": NewReleaseApplySpec(platform),
 
+			// Rendered Templates
+			"upload_blob.v0": NewUploadBlobAction(blobManager),
+
 			// Disk management
 			"list_disk":    NewListDisk(settingsService, platform, logger),
 			"migrate_disk": NewMigrateDisk(platform, dirProvider),
@@ -77,10 +81,13 @@ func NewFactory(
 			// ARP cache management
 			"delete_arp_entries": NewDeleteARPEntries(platform),
 
-			// Networkingconcrete_factory_test.go
+			// Networking
 			"prepare_network_change":     NewPrepareNetworkChange(platform.GetFs(), settingsService, NewAgentKiller()),
 			"prepare_configure_networks": NewPrepareConfigureNetworks(platform, settingsService),
 			"configure_networks":         NewConfigureNetworks(NewAgentKiller()),
+
+			// DNS
+			"sync_dns": NewSyncDNS(blobstore, settingsService, platform, logger),
 		},
 	}
 	return

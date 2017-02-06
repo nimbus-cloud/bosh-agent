@@ -15,6 +15,8 @@ import (
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
 )
 
+const PackagingScriptName = "packaging"
+
 type CompileDirProvider interface {
 	CompileDir() string
 }
@@ -49,8 +51,8 @@ func NewConcreteCompiler(
 	}
 }
 
-func (c concreteCompiler) Compile(pkg Package, deps []boshmodels.Package) (string, string, error) {
-	err := c.packageApplier.KeepOnly([]boshmodels.Package{})
+func (c concreteCompiler) Compile(pkg Package, deps []boshmodels.Package) (blobID, sha1 string, err error) {
+	err = c.packageApplier.KeepOnly([]boshmodels.Package{})
 	if err != nil {
 		return "", "", bosherr.WrapError(err, "Removing packages")
 	}
@@ -67,9 +69,13 @@ func (c concreteCompiler) Compile(pkg Package, deps []boshmodels.Package) (strin
 	if err != nil {
 		return "", "", bosherr.WrapErrorf(err, "Fetching package %s", pkg.Name)
 	}
+	defer c.fs.RemoveAll(compilePath)
 
 	defer func() {
-		_ = c.fs.RemoveAll(compilePath)
+		e := c.fs.RemoveAll(compilePath)
+		if e != nil && err == nil {
+			err = e
+		}
 	}()
 
 	compiledPkg := boshmodels.Package{
@@ -92,23 +98,10 @@ func (c concreteCompiler) Compile(pkg Package, deps []boshmodels.Package) (strin
 		return "", "", bosherr.WrapError(err, "Enabling new package bundle")
 	}
 
-	scriptPath := path.Join(compilePath, "packaging")
+	scriptPath := path.Join(compilePath, PackagingScriptName)
 
 	if c.fs.FileExists(scriptPath) {
-		command := boshsys.Command{
-			Name: "bash",
-			Args: []string{"-x", "packaging"},
-			Env: map[string]string{
-				"BOSH_COMPILE_TARGET":  compilePath,
-				"BOSH_INSTALL_TARGET":  enablePath,
-				"BOSH_PACKAGE_NAME":    pkg.Name,
-				"BOSH_PACKAGE_VERSION": pkg.Version,
-			},
-			WorkingDir: compilePath,
-		}
-
-		_, err := c.runner.RunCommand("compilation", "packaging", command)
-		if err != nil {
+		if err := c.runPackagingCommand(compilePath, enablePath, pkg); err != nil {
 			return "", "", bosherr.WrapError(err, "Running packaging script")
 		}
 	}

@@ -52,6 +52,12 @@ var _ = Describe("LoadConfigFromPath", func() {
 					  {
 					  	"Type": "CDROM",
 					  	"FileName": "/fake-file-name"
+					  },
+					  {
+						"Type": "InstanceMetadata",
+						"URI": "/fake-uri",
+						"Headers": {"fake": "headers"},
+						"SettingsPath": "/fake-settings-path"
 					  }
 				  ],
 				  "UseServerName": true,
@@ -92,6 +98,11 @@ var _ = Describe("LoadConfigFromPath", func() {
 						boshinf.CDROMSourceOptions{
 							FileName: "/fake-file-name",
 						},
+						boshinf.InstanceMetadataSourceOptions{
+							URI:          "/fake-uri",
+							Headers:      map[string]string{"fake": "headers"},
+							SettingsPath: "/fake-settings-path",
+						},
 					},
 					UseServerName: true,
 					UseRegistry:   true,
@@ -109,7 +120,7 @@ var _ = Describe("LoadConfigFromPath", func() {
 	It("returns error if file is not found", func() {
 		_, err := LoadConfigFromPath(fs, "/something_not_exist")
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("not found"))
+		Expect(err.Error()).To(ContainSubstring("Reading file"))
 	})
 
 	It("returns error if file cannot be parsed", func() {
@@ -193,6 +204,23 @@ var _ = Describe("LoadConfigFromPath", func() {
 		_, err := LoadConfigFromPath(fs, "/fake-config.conf")
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("Unmarshalling source type 'HTTP'"))
+	})
+
+	It("returns errors if failed to decode InstanceMetadata source options", func() {
+		fs.WriteFileString("/fake-config.conf", `{
+			"Infrastructure": {
+			  "Settings": {
+				  "Sources": [{
+				  	"Type": "InstanceMetadata",
+					"URI": 1
+					}]
+				}
+			}
+		}`)
+
+		_, err := LoadConfigFromPath(fs, "/fake-config.conf")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("Unmarshalling source type 'InstanceMetadata'"))
 	})
 
 	It("returns errors if failed to decode ConfigDrive source options", func() {

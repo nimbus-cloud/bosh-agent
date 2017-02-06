@@ -37,15 +37,19 @@ type FakePlatform struct {
 
 	AddUserToGroupsGroups             map[string][]string
 	DeleteEphemeralUsersMatchingRegex string
-	SetupSSHPublicKeys                map[string]string
+	SetupSSHPublicKeys                map[string][]string
 
 	SetupSSHCalled    bool
-	SetupSSHPublicKey string
+	SetupSSHPublicKey []string
 	SetupSSHUsername  string
 	SetupSSHErr       error
 
 	UserPasswords         map[string]string
 	SetupHostnameHostname string
+
+	SaveDNSRecordsError      error
+	SaveDNSRecordsHostname   string
+	SaveDNSRecordsDNSRecords boshsettings.DNSRecords
 
 	SetTimeWithNtpServersServers []string
 
@@ -61,6 +65,18 @@ type FakePlatform struct {
 
 	SetupTmpDirCalled bool
 	SetupTmpDirErr    error
+
+	SetupHomeDirCalled bool
+	SetupHomeDirErr    error
+
+	SetupBlobsDirCalled bool
+	SetupBlobsDirErr    error
+
+	SetupLogDirCalled bool
+	SetupLogDirErr    error
+
+	SetupLoggingAndAuditingCalled bool
+	SetupLoggingAndAuditingErr    error
 
 	SetupNetworkingCalled   bool
 	SetupNetworkingNetworks boshsettings.Networks
@@ -96,6 +112,13 @@ type FakePlatform struct {
 
 	IsPersistentDiskMountableResult bool
 	IsPersistentDiskMountableErr    error
+
+	AssociateDiskCallCount int
+	AssociateDiskArgs      []struct {
+		n string
+		s boshsettings.DiskSettings
+	}
+	AssociateDiskError error
 
 	IsMountPointPath          string
 	IsMountPointPartitionPath string
@@ -143,7 +166,7 @@ func NewFakePlatform() (platform *FakePlatform) {
 	platform.FakeVitalsService = fakevitals.NewFakeService()
 	platform.DevicePathResolver = fakedpresolv.NewFakeDevicePathResolver()
 	platform.AddUserToGroupsGroups = make(map[string][]string)
-	platform.SetupSSHPublicKeys = make(map[string]string)
+	platform.SetupSSHPublicKeys = make(map[string][]string)
 	platform.UserPasswords = make(map[string]string)
 	platform.ScsiDiskMap = make(map[string]string)
 	platform.GetFileContentsFromDiskDiskPaths = []string{}
@@ -223,7 +246,7 @@ func (p *FakePlatform) SetupRootDisk(ephemeralDiskPath string) (err error) {
 	return
 }
 
-func (p *FakePlatform) SetupSSH(publicKey, username string) error {
+func (p *FakePlatform) SetupSSH(publicKey []string, username string) error {
 	p.SetupSSHCalled = true
 	p.SetupSSHPublicKeys[username] = publicKey
 	p.SetupSSHPublicKey = publicKey
@@ -234,6 +257,12 @@ func (p *FakePlatform) SetupSSH(publicKey, username string) error {
 func (p *FakePlatform) SetUserPassword(user, encryptedPwd string) (err error) {
 	p.UserPasswords[user] = encryptedPwd
 	return
+}
+
+func (p *FakePlatform) SaveDNSRecords(dnsRecords boshsettings.DNSRecords, hostname string) error {
+	p.SaveDNSRecordsDNSRecords = dnsRecords
+	p.SaveDNSRecordsHostname = hostname
+	return p.SaveDNSRecordsError
 }
 
 func (p *FakePlatform) SetupHostname(hostname string) (err error) {
@@ -283,6 +312,26 @@ func (p *FakePlatform) SetupDataDir() error {
 func (p *FakePlatform) SetupTmpDir() error {
 	p.SetupTmpDirCalled = true
 	return p.SetupTmpDirErr
+}
+
+func (p *FakePlatform) SetupHomeDir() error {
+	p.SetupHomeDirCalled = true
+	return p.SetupHomeDirErr
+}
+
+func (p *FakePlatform) SetupBlobsDir() error {
+	p.SetupBlobsDirCalled = true
+	return p.SetupBlobsDirErr
+}
+
+func (p *FakePlatform) SetupLogDir() error {
+	p.SetupLogDirCalled = true
+	return p.SetupLogDirErr
+}
+
+func (p *FakePlatform) SetupLoggingAndAuditing() error {
+	p.SetupLoggingAndAuditingCalled = true
+	return p.SetupLoggingAndAuditingErr
 }
 
 func (p *FakePlatform) MountPersistentDisk(diskSettings boshsettings.DiskSettings, mountPoint string) (err error) {
@@ -402,4 +451,21 @@ func (p *FakePlatform) RemoveDevTools(packageFileListPath string) error {
 	p.IsRemoveDevToolsCalled = true
 	p.PackageFileListPath = packageFileListPath
 	return p.IsRemoveDevToolsError
+}
+
+func (p *FakePlatform) AssociateDisk(name string, settings boshsettings.DiskSettings) error {
+	p.AssociateDiskCallCount++
+	p.AssociateDiskArgs = append(p.AssociateDiskArgs, struct {
+		n string
+		s boshsettings.DiskSettings
+	}{
+		n: name,
+		s: settings,
+	})
+
+	return p.AssociateDiskError
+}
+
+func (p *FakePlatform) AssociateDiskArgsForCall(i int) (string, boshsettings.DiskSettings) {
+	return p.AssociateDiskArgs[i].n, p.AssociateDiskArgs[i].s
 }

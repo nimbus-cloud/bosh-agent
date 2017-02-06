@@ -2,7 +2,6 @@ package action
 
 import (
 	"errors"
-	"path/filepath"
 
 	boshdirs "github.com/cloudfoundry/bosh-agent/settings/directories"
 	boshblob "github.com/cloudfoundry/bosh-utils/blobstore"
@@ -38,6 +37,10 @@ func (a FetchLogsAction) IsPersistent() bool {
 	return false
 }
 
+func (a FetchLogsAction) IsLoggable() bool {
+	return true
+}
+
 func (a FetchLogsAction) Run(logType string, filters []string) (value map[string]string, err error) {
 	var logsDir string
 
@@ -46,12 +49,12 @@ func (a FetchLogsAction) Run(logType string, filters []string) (value map[string
 		if len(filters) == 0 {
 			filters = []string{"**/*"}
 		}
-		logsDir = filepath.Join(a.settingsDir.BaseDir(), "sys", "log")
+		logsDir = a.settingsDir.LogsDir()
 	case "agent":
 		if len(filters) == 0 {
 			filters = []string{"**/*"}
 		}
-		logsDir = filepath.Join(a.settingsDir.BaseDir(), "bosh", "log")
+		logsDir = a.settingsDir.AgentLogsDir()
 	default:
 		err = bosherr.Error("Invalid log type")
 		return

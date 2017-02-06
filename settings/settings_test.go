@@ -13,6 +13,7 @@ import (
 
 var _ = Describe("Settings", func() {
 	var settings Settings
+	var updateSettings UpdateSettings
 
 	Describe("PersistentDiskSettings", func() {
 		Context("when the disk settings are hash", func() {
@@ -21,9 +22,11 @@ var _ = Describe("Settings", func() {
 					Disks: Disks{
 						Persistent: map[string]interface{}{
 							"fake-disk-id": map[string]interface{}{
-								"volume_id": "fake-disk-volume-id",
-								"id":        "fake-disk-device-id",
-								"path":      "fake-disk-path",
+								"volume_id":      "fake-disk-volume-id",
+								"id":             "fake-disk-device-id",
+								"path":           "fake-disk-path",
+								"lun":            "fake-disk-lun",
+								"host_device_id": "fake-disk-host-device-id",
 							},
 						},
 					},
@@ -34,10 +37,12 @@ var _ = Describe("Settings", func() {
 				diskSettings, found := settings.PersistentDiskSettings("fake-disk-id")
 				Expect(found).To(BeTrue())
 				Expect(diskSettings).To(Equal(DiskSettings{
-					ID:       "fake-disk-id",
-					DeviceID: "fake-disk-device-id",
-					VolumeID: "fake-disk-volume-id",
-					Path:     "fake-disk-path",
+					ID:           "fake-disk-id",
+					DeviceID:     "fake-disk-device-id",
+					VolumeID:     "fake-disk-volume-id",
+					Path:         "fake-disk-path",
+					Lun:          "fake-disk-lun",
+					HostDeviceID: "fake-disk-host-device-id",
 				}))
 			})
 
@@ -62,6 +67,8 @@ var _ = Describe("Settings", func() {
 						DeviceID:       "fake-disk-device-id",
 						VolumeID:       "fake-disk-volume-id",
 						Path:           "fake-disk-path",
+						Lun:            "fake-disk-lun",
+						HostDeviceID:   "fake-disk-host-device-id",
 						FileSystemType: "xfs",
 					}))
 				})
@@ -74,10 +81,12 @@ var _ = Describe("Settings", func() {
 					diskSettings, _ := settings.PersistentDiskSettings("fake-disk-id")
 					Expect(settings.Env.PersistentDiskFS).To(Equal(disk.FileSystemDefault))
 					Expect(diskSettings).To(Equal(DiskSettings{
-						ID:       "fake-disk-id",
-						DeviceID: "fake-disk-device-id",
-						VolumeID: "fake-disk-volume-id",
-						Path:     "fake-disk-path",
+						ID:           "fake-disk-id",
+						DeviceID:     "fake-disk-device-id",
+						VolumeID:     "fake-disk-volume-id",
+						Path:         "fake-disk-path",
+						Lun:          "fake-disk-lun",
+						HostDeviceID: "fake-disk-host-device-id",
 					}))
 				})
 
@@ -93,6 +102,8 @@ var _ = Describe("Settings", func() {
 						DeviceID:       "fake-disk-device-id",
 						VolumeID:       "fake-disk-volume-id",
 						Path:           "fake-disk-path",
+						Lun:            "fake-disk-lun",
+						HostDeviceID:   "fake-disk-host-device-id",
 						FileSystemType: disk.FileSystemType("blahblah"),
 					}))
 				})
@@ -135,8 +146,10 @@ var _ = Describe("Settings", func() {
 					Disks: Disks{
 						Persistent: map[string]interface{}{
 							"fake-disk-id": map[string]interface{}{
-								"volume_id": "fake-disk-volume-id",
-								"path":      "fake-disk-path",
+								"volume_id":      "fake-disk-volume-id",
+								"path":           "fake-disk-path",
+								"lun":            "fake-disk-lun",
+								"host_device_id": "fake-disk-host-device-id",
 							},
 						},
 					},
@@ -147,9 +160,11 @@ var _ = Describe("Settings", func() {
 				diskSettings, found := settings.PersistentDiskSettings("fake-disk-id")
 				Expect(found).To(BeTrue())
 				Expect(diskSettings).To(Equal(DiskSettings{
-					ID:       "fake-disk-id",
-					VolumeID: "fake-disk-volume-id",
-					Path:     "fake-disk-path",
+					ID:           "fake-disk-id",
+					VolumeID:     "fake-disk-volume-id",
+					Path:         "fake-disk-path",
+					Lun:          "fake-disk-lun",
+					HostDeviceID: "fake-disk-host-device-id",
 				}))
 			})
 		})
@@ -160,8 +175,10 @@ var _ = Describe("Settings", func() {
 					Disks: Disks{
 						Persistent: map[string]interface{}{
 							"fake-disk-id": map[string]interface{}{
-								"id":   "fake-disk-device-id",
-								"path": "fake-disk-path",
+								"id":             "fake-disk-device-id",
+								"path":           "fake-disk-path",
+								"lun":            "fake-disk-lun",
+								"host_device_id": "fake-disk-host-device-id",
 							},
 						},
 					},
@@ -172,9 +189,11 @@ var _ = Describe("Settings", func() {
 				diskSettings, found := settings.PersistentDiskSettings("fake-disk-id")
 				Expect(found).To(BeTrue())
 				Expect(diskSettings).To(Equal(DiskSettings{
-					ID:       "fake-disk-id",
-					DeviceID: "fake-disk-device-id",
-					Path:     "fake-disk-path",
+					ID:           "fake-disk-id",
+					DeviceID:     "fake-disk-device-id",
+					Path:         "fake-disk-path",
+					Lun:          "fake-disk-lun",
+					HostDeviceID: "fake-disk-host-device-id",
 				}))
 			})
 		})
@@ -185,7 +204,9 @@ var _ = Describe("Settings", func() {
 					Disks: Disks{
 						Persistent: map[string]interface{}{
 							"fake-disk-id": map[string]interface{}{
-								"volume_id": "fake-disk-volume-id",
+								"volume_id":      "fake-disk-volume-id",
+								"lun":            "fake-disk-lun",
+								"host_device_id": "fake-disk-host-device-id",
 							},
 						},
 					},
@@ -196,8 +217,35 @@ var _ = Describe("Settings", func() {
 				diskSettings, found := settings.PersistentDiskSettings("fake-disk-id")
 				Expect(found).To(BeTrue())
 				Expect(diskSettings).To(Equal(DiskSettings{
-					ID:       "fake-disk-id",
-					VolumeID: "fake-disk-volume-id",
+					ID:           "fake-disk-id",
+					VolumeID:     "fake-disk-volume-id",
+					Lun:          "fake-disk-lun",
+					HostDeviceID: "fake-disk-host-device-id",
+				}))
+			})
+		})
+
+		Context("when only (lun, host_device_id) are provided", func() {
+			BeforeEach(func() {
+				settings = Settings{
+					Disks: Disks{
+						Persistent: map[string]interface{}{
+							"fake-disk-id": map[string]interface{}{
+								"lun":            "fake-disk-lun",
+								"host_device_id": "fake-disk-host-device-id",
+							},
+						},
+					},
+				}
+			})
+
+			It("does not set path", func() {
+				diskSettings, found := settings.PersistentDiskSettings("fake-disk-id")
+				Expect(found).To(BeTrue())
+				Expect(diskSettings).To(Equal(DiskSettings{
+					ID:           "fake-disk-id",
+					Lun:          "fake-disk-lun",
+					HostDeviceID: "fake-disk-host-device-id",
 				}))
 			})
 		})
@@ -226,9 +274,11 @@ var _ = Describe("Settings", func() {
 				settings = Settings{
 					Disks: Disks{
 						Ephemeral: map[string]interface{}{
-							"id":        "fake-disk-device-id",
-							"volume_id": "fake-disk-volume-id",
-							"path":      "fake-disk-path",
+							"id":             "fake-disk-device-id",
+							"volume_id":      "fake-disk-volume-id",
+							"path":           "fake-disk-path",
+							"lun":            "fake-disk-lun",
+							"host_device_id": "fake-disk-host-device-id",
 						},
 					},
 				}
@@ -236,9 +286,11 @@ var _ = Describe("Settings", func() {
 
 			It("converts disk settings", func() {
 				Expect(settings.EphemeralDiskSettings()).To(Equal(DiskSettings{
-					DeviceID: "fake-disk-device-id",
-					VolumeID: "fake-disk-volume-id",
-					Path:     "fake-disk-path",
+					DeviceID:     "fake-disk-device-id",
+					VolumeID:     "fake-disk-volume-id",
+					Path:         "fake-disk-path",
+					Lun:          "fake-disk-lun",
+					HostDeviceID: "fake-disk-host-device-id",
 				}))
 			})
 		})
@@ -588,13 +640,25 @@ var _ = Describe("Settings", func() {
 	Describe("Env", func() {
 		It("unmarshal env value correctly", func() {
 			var env Env
-			envJSON := `{"bosh": {"password": "fake-password", "keep_root_password": false, "remove_dev_tools": true}}`
+			envJSON := `{"bosh": {"password": "fake-password", "keep_root_password": false, "remove_dev_tools": true, "authorized_keys": ["fake-key"]}}`
 
 			err := json.Unmarshal([]byte(envJSON), &env)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(env.GetPassword()).To(Equal("fake-password"))
 			Expect(env.GetKeepRootPassword()).To(BeFalse())
 			Expect(env.GetRemoveDevTools()).To(BeTrue())
+			Expect(env.GetAuthorizedKeys()).To(ConsistOf("fake-key"))
+		})
+	})
+
+	Describe("UpdateSettings", func() {
+		var updateSettingsJSON string
+		BeforeEach(func() {
+			updateSettingsJSON = `{"trusted_certs": "some_cert", "disk_associations": [{"name": "some_name", "cid": "some_cid"}]}`
+		})
+		It("contains the correct keys", func() {
+			err := json.Unmarshal([]byte(updateSettingsJSON), &updateSettings)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })

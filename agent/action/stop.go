@@ -30,8 +30,17 @@ func (a StopAction) IsPersistent() bool {
 	return false
 }
 
-func (a StopAction) Run() (value string, err error) {
-	err = a.jobSupervisor.Stop()
+func (a StopAction) IsLoggable() bool {
+	return true
+}
+
+func (a StopAction) Run(protocolVersion ProtocolVersion) (value string, err error) {
+	if protocolVersion > 2 {
+		err = a.jobSupervisor.StopAndWait()
+	} else {
+		err = a.jobSupervisor.Stop()
+	}
+
 	if err != nil {
 		err = bosherr.WrapError(err, "Stopping Monitored Services")
 		return

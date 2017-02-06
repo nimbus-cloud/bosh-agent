@@ -82,7 +82,6 @@ func (s GenericScript) Run() error {
 		Stdout: stdoutFile,
 		Stderr: stderrFile,
 	}
-
 	_, _, _, err = s.runner.RunComplexCommand(command)
 
 	return err

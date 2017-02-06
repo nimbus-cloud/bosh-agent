@@ -33,7 +33,8 @@ func NewConcreteScript(
 	path string,
 	params ScriptParams,
 	timeService clock.Clock,
-	logger boshlog.Logger) ConcreteScript {
+	logger boshlog.Logger,
+) ConcreteScript {
 	return ConcreteScript{
 		fs:     fs,
 		runner: runner,

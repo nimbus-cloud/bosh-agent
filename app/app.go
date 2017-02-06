@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	sigar "github.com/cloudfoundry/gosigar"
+	"github.com/pivotal-golang/clock"
 
 	boshagent "github.com/cloudfoundry/bosh-agent/agent"
 	boshaction "github.com/cloudfoundry/bosh-agent/agent/action"
@@ -15,6 +15,7 @@ import (
 	boshbc "github.com/cloudfoundry/bosh-agent/agent/applier/bundlecollection"
 	boshaj "github.com/cloudfoundry/bosh-agent/agent/applier/jobs"
 	boshap "github.com/cloudfoundry/bosh-agent/agent/applier/packages"
+	boshagentblobstore "github.com/cloudfoundry/bosh-agent/agent/blobstore"
 	boshrunner "github.com/cloudfoundry/bosh-agent/agent/cmdrunner"
 	boshcomp "github.com/cloudfoundry/bosh-agent/agent/compiler"
 	boshscript "github.com/cloudfoundry/bosh-agent/agent/script"
@@ -35,7 +36,7 @@ import (
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
 	boshuuid "github.com/cloudfoundry/bosh-utils/uuid"
-	"github.com/pivotal-golang/clock"
+	sigar "github.com/cloudfoundry/gosigar"
 )
 
 type App interface {
@@ -76,16 +77,16 @@ func (app *app) Setup(args []string) error {
 	app.dirProvider = boshdirs.NewProvider(opts.BaseDirectory)
 	app.logStemcellInfo()
 
+	statsCollector := boshsigar.NewSigarStatsCollector(&sigar.ConcreteSigar{})
+
 	state, err := boshplatform.NewBootstrapState(app.fs, filepath.Join(app.dirProvider.BoshDir(), "agent_state.json"))
 	if err != nil {
 		return bosherr.WrapError(err, "Loading state")
 	}
 
-	// Pulled outside of the platform provider so bosh-init will not pull in
-	// sigar when cross compiling linux -> darwin
-	sigarCollector := boshsigar.NewSigarStatsCollector(&sigar.ConcreteSigar{})
+	timeService := clock.NewClock()
+	platformProvider := boshplatform.NewProvider(app.logger, app.dirProvider, statsCollector, app.fs, config.Platform, state, timeService)
 
-	platformProvider := boshplatform.NewProvider(app.logger, app.dirProvider, sigarCollector, app.fs, config.Platform, state)
 	app.platform, err = platformProvider.Get(opts.PlatformName)
 	if err != nil {
 		return bosherr.WrapError(err, "Getting platform")
@@ -136,10 +137,9 @@ func (app *app) Setup(args []string) error {
 		return bosherr.WrapError(err, "Getting mbus handler")
 	}
 
-	blobstoreProvider := boshblob.NewProvider(app.platform.GetFs(), app.platform.GetRunner(), app.dirProvider.EtcDir(), app.logger)
+	blobManager := boshblob.NewBlobManager(app.platform.GetFs(), app.dirProvider.BlobsDir())
+	blobstore, err := app.setupBlobstore(settingsService.GetSettings().Blobstore, blobManager)
 
-	blobsettings := settingsService.GetSettings().Blobstore
-	blobstore, err := blobstoreProvider.Get(blobsettings.Type, blobsettings.Options)
 	if err != nil {
 		return bosherr.WrapError(err, "Getting blobstore")
 	}
@@ -184,8 +184,6 @@ func (app *app) Setup(args []string) error {
 		specFilePath,
 	)
 
-	timeService := clock.NewClock()
-
 	jobScriptProvider := boshscript.NewConcreteJobScriptProvider(
 		app.platform.GetRunner(),
 		app.platform.GetFs(),
@@ -198,6 +196,7 @@ func (app *app) Setup(args []string) error {
 		settingsService,
 		app.platform,
 		blobstore,
+		blobManager,
 		taskService,
 		notifier,
 		applier,
@@ -229,7 +228,7 @@ func (app *app) Setup(args []string) error {
 		jobSupervisor,
 		specService,
 		syslogServer,
-		time.Minute,
+		time.Second*30,
 		settingsService,
 		uuidGen,
 		timeService,
@@ -340,4 +339,20 @@ func (app *app) fileContents(path string) string {
 		contents = "?"
 	}
 	return contents
+}
+
+func (app *app) setupBlobstore(blobstoreSettings boshsettings.Blobstore, blobManager boshblob.BlobManagerInterface) (boshblob.Blobstore, error) {
+	blobstoreProvider := boshblob.NewProvider(
+		app.platform.GetFs(),
+		app.platform.GetRunner(),
+		app.dirProvider.EtcDir(),
+		app.logger,
+	)
+
+	blobstore, err := blobstoreProvider.Get(blobstoreSettings.Type, blobstoreSettings.Options)
+	if err != nil {
+		return nil, bosherr.WrapError(err, "Getting blobstore")
+	}
+
+	return boshagentblobstore.NewCascadingBlobstore(blobstore, blobManager, app.logger), nil
 }

@@ -2,8 +2,18 @@ package settings
 
 import (
 	"fmt"
+
 	"github.com/cloudfoundry/bosh-agent/platform/disk"
 )
+
+type DiskAssociations struct {
+	Associations []DiskAssociation `json:"disk_associations"`
+}
+
+type DiskAssociation struct {
+	Name    string `json:"name"`
+	DiskCID string `json:"cid"`
+}
 
 const (
 	RootUsername        = "root"
@@ -14,15 +24,19 @@ const (
 )
 
 type Settings struct {
-	AgentID      string    `json:"agent_id"`
-	Blobstore    Blobstore `json:"blobstore"`
-	Disks        Disks     `json:"disks"`
-	Env          Env       `json:"env"`
-	Networks     Networks  `json:"networks"`
-	Ntp          []string  `json:"ntp"`
-	Mbus         string    `json:"mbus"`
-	VM           VM        `json:"vm"`
-	TrustedCerts string    `json:"trusted_certs"`
+	AgentID   string    `json:"agent_id"`
+	Blobstore Blobstore `json:"blobstore"`
+	Disks     Disks     `json:"disks"`
+	Env       Env       `json:"env"`
+	Networks  Networks  `json:"networks"`
+	Ntp       []string  `json:"ntp"`
+	Mbus      string    `json:"mbus"`
+	VM        VM        `json:"vm"`
+}
+
+type UpdateSettings struct {
+	DiskAssociations []DiskAssociation `json:"disk_associations"`
+	TrustedCerts     string            `json:"trusted_certs"`
 }
 
 type Source interface {
@@ -43,6 +57,7 @@ type Disks struct {
 	// e.g "/dev/sdb", "2"
 	// Newer CPIs will populate it in a hash
 	// e.g {"path" => "/dev/sdc", "volume_id" => "3"}
+	//     {"lun" => "0", "host_device_id" => "{host-device-id}"}
 	Ephemeral interface{} `json:"ephemeral"`
 
 	// Older CPIs returned disk settings as strings
@@ -51,6 +66,7 @@ type Disks struct {
 	// Newer CPIs will populate it in a hash:
 	// e.g {"disk-3845-43758-7243-38754" => {"path" => "/dev/sdc"}}
 	//     {"disk-3845-43758-7243-38754" => {"volume_id" => "3"}}
+	//     {"disk-3845-43758-7243-38754" => {"lun" => "0", "host_device_id" => "{host-device-id}"}}
 	Persistent map[string]interface{} `json:"persistent"`
 
 	RawEphemeral []DiskSettings `json:"raw_ephemeral"`
@@ -60,6 +76,8 @@ type DiskSettings struct {
 	ID             string
 	DeviceID       string
 	VolumeID       string
+	Lun            string
+	HostDeviceID   string
 	Path           string
 	FileSystemType disk.FileSystemType
 }
@@ -84,6 +102,12 @@ func (s Settings) PersistentDiskSettings(diskID string) (DiskSettings, bool) {
 				}
 				if deviceID, ok := hashSettings["id"]; ok {
 					diskSettings.DeviceID = deviceID.(string)
+				}
+				if lun, ok := hashSettings["lun"]; ok {
+					diskSettings.Lun = lun.(string)
+				}
+				if hostDeviceID, ok := hashSettings["host_device_id"]; ok {
+					diskSettings.HostDeviceID = hostDeviceID.(string)
 				}
 			} else {
 				// Old CPIs return disk path (string) or volume id (string) as disk settings
@@ -112,6 +136,12 @@ func (s Settings) EphemeralDiskSettings() DiskSettings {
 			}
 			if deviceID, ok := hashSettings["id"]; ok {
 				diskSettings.DeviceID = deviceID.(string)
+			}
+			if lun, ok := hashSettings["lun"]; ok {
+				diskSettings.Lun = lun.(string)
+			}
+			if hostDeviceID, ok := hashSettings["host_device_id"]; ok {
+				diskSettings.HostDeviceID = hostDeviceID.(string)
 			}
 		} else {
 			// Old CPIs return disk path (string) or volume id (string) as disk settings
@@ -144,10 +174,20 @@ func (e Env) GetRemoveDevTools() bool {
 	return e.Bosh.RemoveDevTools
 }
 
+func (e Env) GetAuthorizedKeys() []string {
+	return e.Bosh.AuthorizedKeys
+}
+
 type BoshEnv struct {
-	Password         string `json:"password"`
-	KeepRootPassword bool   `json:"keep_root_password"`
-	RemoveDevTools   bool   `json:"remove_dev_tools"`
+	Password         string   `json:"password"`
+	KeepRootPassword bool     `json:"keep_root_password"`
+	RemoveDevTools   bool     `json:"remove_dev_tools"`
+	AuthorizedKeys   []string `json:"authorized_keys"`
+}
+
+type DNSRecords struct {
+	Version uint32      `json:"Version"`
+	Records [][2]string `json:"records"`
 }
 
 type NetworkType string

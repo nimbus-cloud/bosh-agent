@@ -19,12 +19,18 @@ type AgentClient interface {
 	MigrateDisk() error
 	CompilePackage(packageSource BlobRef, compiledPackageDependencies []BlobRef) (compiledPackageRef BlobRef, err error)
 	DeleteARPEntries(ips []string) error
-	UpdateSettings(settings settings.Settings) error
+	SyncDNS(blobID, sha1 string, version uint64) (string, error)
+	UpdateSettings(settings settings.UpdateSettings) error
 	RunScript(scriptName string, options map[string]interface{}) error
 }
 
 type AgentState struct {
-	JobState string
+	JobState     string
+	NetworkSpecs map[string]NetworkSpec
+}
+
+type NetworkSpec struct {
+	IP string `json:"ip"`
 }
 
 type BlobRef struct {

@@ -2,7 +2,9 @@ package compiler_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"runtime"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -153,7 +155,12 @@ func init() {
 			})
 
 			It("returns an error if removing compile target directory during uncompression fails", func() {
-				fs.RegisterRemoveAllError("/fake-compile-dir/pkg_name", errors.New("fake-remove-error"))
+				fs.RemoveAllStub = func(path string) error {
+					if path == "/fake-compile-dir/pkg_name" {
+						return errors.New("fake-remove-error")
+					}
+					return nil
+				}
 
 				_, _, err := compiler.Compile(pkg, pkgDeps)
 				Expect(err).To(HaveOccurred())
@@ -161,7 +168,12 @@ func init() {
 			})
 
 			It("returns an error if creating compile target directory during uncompression fails", func() {
-				fs.RegisterMkdirAllError("/fake-compile-dir/pkg_name", errors.New("fake-mkdir-error"))
+				fs.RemoveAllStub = func(path string) error {
+					if path == "/fake-compile-dir/pkg_name" {
+						return errors.New("fake-mkdir-error")
+					}
+					return nil
+				}
 
 				_, _, err := compiler.Compile(pkg, pkgDeps)
 				Expect(err).To(HaveOccurred())
@@ -169,7 +181,12 @@ func init() {
 			})
 
 			It("returns an error if removing temporary compile target directory during uncompression fails", func() {
-				fs.RegisterRemoveAllError("/fake-compile-dir/pkg_name-bosh-agent-unpack", errors.New("fake-remove-error"))
+				fs.RemoveAllStub = func(path string) error {
+					if path == "/fake-compile-dir/pkg_name-bosh-agent-unpack" {
+						return errors.New("fake-remove-error")
+					}
+					return nil
+				}
 
 				_, _, err := compiler.Compile(pkg, pkgDeps)
 				Expect(err).To(HaveOccurred())
@@ -215,10 +232,29 @@ func init() {
 				}))
 			})
 
+			It("returns an error if removing the compile directory fails", func() {
+				callCount := 0
+				fs.RemoveAllStub = func(path string) error {
+					if path == "/fake-compile-dir/pkg_name" {
+						callCount++
+						if callCount > 1 {
+							return errors.New("fake-remove-error")
+						}
+					}
+					return nil
+				}
+
+				_, _, err := compiler.Compile(pkg, pkgDeps)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("fake-remove-error"))
+			})
+
 			Context("when packaging script exists", func() {
+				const packagingScriptContents = "hi"
 				BeforeEach(func() {
 					compressor.DecompressFileToDirCallBack = func() {
-						fs.WriteFileString("/fake-compile-dir/pkg_name/packaging", "hi")
+						filename := "/fake-compile-dir/pkg_name/" + PackagingScriptName
+						fs.WriteFileString(filename, packagingScriptContents)
 					}
 				})
 
@@ -227,8 +263,6 @@ func init() {
 					Expect(err).ToNot(HaveOccurred())
 
 					expectedCmd := boshsys.Command{
-						Name: "bash",
-						Args: []string{"-x", "packaging"},
 						Env: map[string]string{
 							"BOSH_COMPILE_TARGET":  "/fake-compile-dir/pkg_name",
 							"BOSH_INSTALL_TARGET":  "/fake-dir/packages/pkg_name",
@@ -238,10 +272,19 @@ func init() {
 						WorkingDir: "/fake-compile-dir/pkg_name",
 					}
 
+					cmd := runner.RunCommands[0]
+					if runtime.GOOS == "windows" {
+						expectedCmd.Name = "powershell"
+						expectedCmd.Args = []string{"-command", fmt.Sprintf(`"iex (get-content -raw %s)"`, PackagingScriptName)}
+					} else {
+						expectedCmd.Name = "bash"
+						expectedCmd.Args = []string{"-x", PackagingScriptName}
+					}
+
+					Expect(cmd).To(Equal(expectedCmd))
 					Expect(len(runner.RunCommands)).To(Equal(1))
-					Expect(runner.RunCommands[0]).To(Equal(expectedCmd))
 					Expect(runner.RunCommandJobName).To(Equal("compilation"))
-					Expect(runner.RunCommandTaskName).To(Equal("packaging"))
+					Expect(runner.RunCommandTaskName).To(Equal(PackagingScriptName))
 				})
 
 				It("propagates the error from packaging script", func() {

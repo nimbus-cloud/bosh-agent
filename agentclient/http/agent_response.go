@@ -5,6 +5,7 @@ import (
 
 	"runtime/debug"
 
+	"github.com/cloudfoundry/bosh-agent/agentclient"
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
 )
 
@@ -30,6 +31,22 @@ func (r *SimpleTaskResponse) ServerError() error {
 }
 
 func (r *SimpleTaskResponse) Unmarshal(message []byte) error {
+	return json.Unmarshal(message, r)
+}
+
+type SyncDNSResponse struct {
+	Value     string
+	Exception *exception
+}
+
+func (r *SyncDNSResponse) ServerError() error {
+	if r.Exception != nil {
+		return bosherr.Errorf("Agent responded with error: %s", r.Exception.Message)
+	}
+	return nil
+}
+
+func (r *SyncDNSResponse) Unmarshal(message []byte) error {
 	return json.Unmarshal(message, r)
 }
 
@@ -89,7 +106,8 @@ func (r *StateResponse) Unmarshal(message []byte) error {
 }
 
 type AgentState struct {
-	JobState string `json:"job_state"`
+	JobState     string                             `json:"job_state"`
+	NetworkSpecs map[string]agentclient.NetworkSpec `json:"networks"`
 }
 
 type TaskResponse struct {
@@ -126,7 +144,7 @@ func (r *TaskResponse) TaskID() (string, error) {
 //
 // Agent response to get_task can be in different format based on task state.
 // If task state is running agent responds
-// with value as { agent_task_id: "task-id", state: "running" }
+// with value as {value: { agent_task_id: "task-id", state: "running" }}
 // Otherwise the value is a string like "stopped".
 func (r *TaskResponse) TaskState() (string, error) {
 	complexResponse, ok := r.Value.(map[string]interface{})

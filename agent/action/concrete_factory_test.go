@@ -5,22 +5,23 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/cloudfoundry/bosh-agent/agent/action"
+
+	boshscript "github.com/cloudfoundry/bosh-agent/agent/script"
+	boshntp "github.com/cloudfoundry/bosh-agent/platform/ntp"
+	boshdir "github.com/cloudfoundry/bosh-agent/settings/directories"
+	boshlog "github.com/cloudfoundry/bosh-utils/logger"
+
 	fakeas "github.com/cloudfoundry/bosh-agent/agent/applier/applyspec/fakes"
 	fakeappl "github.com/cloudfoundry/bosh-agent/agent/applier/fakes"
 	fakecomp "github.com/cloudfoundry/bosh-agent/agent/compiler/fakes"
-	boshscript "github.com/cloudfoundry/bosh-agent/agent/script"
-
 	fakescript "github.com/cloudfoundry/bosh-agent/agent/script/fakes"
 	faketask "github.com/cloudfoundry/bosh-agent/agent/task/fakes"
 	fakejobsuper "github.com/cloudfoundry/bosh-agent/jobsupervisor/fakes"
 	nimbus "github.com/cloudfoundry/bosh-agent/nimbus"
 	fakenotif "github.com/cloudfoundry/bosh-agent/notification/fakes"
 	fakeplatform "github.com/cloudfoundry/bosh-agent/platform/fakes"
-	boshntp "github.com/cloudfoundry/bosh-agent/platform/ntp"
-	boshdir "github.com/cloudfoundry/bosh-agent/settings/directories"
 	fakesettings "github.com/cloudfoundry/bosh-agent/settings/fakes"
 	fakeblobstore "github.com/cloudfoundry/bosh-utils/blobstore/fakes"
-	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 )
 
 //go:generate counterfeiter -o fakes/fake_clock.go ../../vendor/github.com/pivotal-golang/clock Clock
@@ -30,6 +31,7 @@ var _ = Describe("concreteFactory", func() {
 		settingsService   *fakesettings.FakeSettingsService
 		platform          *fakeplatform.FakePlatform
 		blobstore         *fakeblobstore.FakeBlobstore
+		blobManager       *fakeblobstore.FakeBlobManagerInterface
 		taskService       *faketask.FakeService
 		notifier          *fakenotif.FakeNotifier
 		applier           *fakeappl.FakeApplier
@@ -46,6 +48,7 @@ var _ = Describe("concreteFactory", func() {
 		settingsService = &fakesettings.FakeSettingsService{}
 		platform = fakeplatform.NewFakePlatform()
 		blobstore = &fakeblobstore.FakeBlobstore{}
+		blobManager = &fakeblobstore.FakeBlobManagerInterface{}
 		taskService = &faketask.FakeService{}
 		notifier = fakenotif.NewFakeNotifier()
 		applier = fakeappl.NewFakeApplier()
@@ -67,6 +70,7 @@ var _ = Describe("concreteFactory", func() {
 			settingsService,
 			platform,
 			blobstore,
+			blobManager,
 			taskService,
 			notifier,
 			applier,
@@ -219,5 +223,18 @@ var _ = Describe("concreteFactory", func() {
 		action, err := factory.Create("delete_arp_entries")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(action).To(Equal(NewDeleteARPEntries(platform)))
+	})
+
+	It("sync_dns", func() {
+		action, err := factory.Create("sync_dns")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(action).To(Equal(NewSyncDNS(blobstore, settingsService, platform, logger)))
+	})
+
+	It("upload_blob.v0", func() {
+		action, err := factory.Create("upload_blob.v0")
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(action).To(Equal(NewUploadBlobAction(blobManager)))
 	})
 })

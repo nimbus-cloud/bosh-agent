@@ -4,11 +4,11 @@ import (
 	"errors"
 	"time"
 
-	. "github.com/cloudfoundry/bosh-utils/internal/github.com/onsi/ginkgo"
-	. "github.com/cloudfoundry/bosh-utils/internal/github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry/bosh-utils/internal/github.com/pivotal-golang/clock/fakeclock"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
+	"github.com/pivotal-golang/clock/fakeclock"
 
 	. "github.com/cloudfoundry/bosh-utils/retrystrategy"
 )

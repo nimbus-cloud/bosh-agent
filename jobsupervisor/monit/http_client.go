@@ -8,8 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"code.google.com/p/go-charset/charset"
-	_ "code.google.com/p/go-charset/data" // translations between char sets
+	"golang.org/x/net/html/charset"
 
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
 	boshhttp "github.com/cloudfoundry/bosh-utils/http"
@@ -84,9 +83,11 @@ func (c httpClient) StartService(serviceName string) error {
 }
 
 func (c httpClient) StopService(serviceName string) error {
+	var response *http.Response
+
 	response, err := c.makeRequest(c.stopClient, c.monitURL(serviceName), "POST", "action=stop")
 	if err != nil {
-		return bosherr.WrapError(err, "Sending stop request to monit")
+		return bosherr.WrapErrorf(err, "Sending stop request for service '%s'", serviceName)
 	}
 
 	defer func() {
@@ -97,7 +98,7 @@ func (c httpClient) StopService(serviceName string) error {
 
 	err = c.validateResponse(response)
 	if err != nil {
-		return bosherr.WrapErrorf(err, "Stopping Monit service %s", serviceName)
+		return bosherr.WrapErrorf(err, "Stopping Monit service '%s'", serviceName)
 	}
 
 	return nil
@@ -129,7 +130,7 @@ func (c httpClient) Status() (Status, error) {
 
 func (c httpClient) status() (status, error) {
 	c.logger.Debug("http-client", "status function called")
-	url := c.monitURL("/_status2")
+	url := c.monitURL("_status2")
 	url.RawQuery = "format=xml"
 
 	response, err := c.makeRequest(c.statusClient, url, "GET", "")
@@ -149,7 +150,7 @@ func (c httpClient) status() (status, error) {
 	}
 
 	decoder := xml.NewDecoder(response.Body)
-	decoder.CharsetReader = charset.NewReader
+	decoder.CharsetReader = charset.NewReaderLabel
 
 	var st status
 

@@ -29,13 +29,11 @@ var _ = Describe("RunErrand", func() {
 		action = NewRunErrand(specService, "/fake-jobs-dir", cmdRunner, logger)
 	})
 
-	It("is asynchronous", func() {
-		Expect(action.IsAsynchronous()).To(BeTrue())
-	})
+	AssertActionIsAsynchronous(action)
+	AssertActionIsNotPersistent(action)
+	AssertActionIsLoggable(action)
 
-	It("is not persistent", func() {
-		Expect(action.IsPersistent()).To(BeFalse())
-	})
+	AssertActionIsNotResumable(action)
 
 	Describe("Run", func() {
 		Context("when apply spec is successfully retrieved", func() {
@@ -72,14 +70,9 @@ var _ = Describe("RunErrand", func() {
 					It("runs errand script with properly configured environment", func() {
 						_, err := action.Run()
 						Expect(err).ToNot(HaveOccurred())
-						Expect(cmdRunner.RunComplexCommands).To(Equal([]boshsys.Command{
-							boshsys.Command{
-								Name: "/fake-jobs-dir/fake-job-name/bin/run",
-								Env: map[string]string{
-									"PATH": "/usr/sbin:/usr/bin:/sbin:/bin",
-								},
-							},
-						}))
+						cmd := cmdRunner.RunComplexCommands[0]
+						env := map[string]string{"PATH": "/usr/sbin:/usr/bin:/sbin:/bin"}
+						Expect(cmd.Env).To(Equal(env))
 					})
 				})
 

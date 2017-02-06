@@ -1,7 +1,11 @@
+// +build !windows
+
 package jobsupervisor
 
 import (
 	"time"
+
+	"github.com/pivotal-golang/clock"
 
 	boshhandler "github.com/cloudfoundry/bosh-agent/handler"
 	boshmonit "github.com/cloudfoundry/bosh-agent/jobsupervisor/monit"
@@ -10,6 +14,8 @@ import (
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 )
+
+const jobSupervisorListenPort = 2825
 
 type Provider struct {
 	supervisors map[string]JobSupervisor
@@ -22,24 +28,29 @@ func NewProvider(
 	dirProvider boshdir.Provider,
 	handler boshhandler.Handler,
 ) (p Provider) {
+	timeService := clock.NewClock()
+	fs := platform.GetFs()
+	runner := platform.GetRunner()
 	monitJobSupervisor := NewMonitJobSupervisor(
-		platform.GetFs(),
-		platform.GetRunner(),
+		fs,
+		runner,
 		client,
 		logger,
 		dirProvider,
-		2825,
+		jobSupervisorListenPort,
 		MonitReloadOptions{
 			MaxTries:               3,
 			MaxCheckTries:          6,
 			DelayBetweenCheckTries: 5 * time.Second,
 		},
+		timeService,
 	)
 
 	p.supervisors = map[string]JobSupervisor{
 		"monit":      monitJobSupervisor,
 		"dummy":      NewDummyJobSupervisor(),
 		"dummy-nats": NewDummyNatsJobSupervisor(handler),
+		// Cannot link to "windows" JobSupervisor
 	}
 
 	return
